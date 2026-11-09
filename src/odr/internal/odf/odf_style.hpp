@@ -85,7 +85,6 @@ public:
   [[nodiscard]] pugi::xml_node
   default_style_node(const std::string &family) const;
 
-
   [[nodiscard]] PageLayout page_layout(const std::string &name) const;
 
   [[nodiscard]] pugi::xml_node font_face_node(const std::string &name) const;
