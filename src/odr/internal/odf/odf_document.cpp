@@ -762,8 +762,8 @@ public:
     for_each_cell_run(element_id, [&](const ElementRegistry::Sheet::Cell &cell,
                                       const std::uint32_t row,
                                       const TableDimensions &repeated) {
-      if (!cell.node.first_child() || row >= limit.rows ||
-          cell.begin >= limit.columns) {
+      if ((!cell.node.first_child() && !states_value(cell.node)) ||
+          row >= limit.rows || cell.begin >= limit.columns) {
         return;
       }
       const std::uint32_t colspan = std::max(
@@ -1887,7 +1887,79 @@ public:
     if (const pugi::xml_attribute formula = node.attribute("table:formula")) {
       result = result.with_formula(formula.value());
     }
+    if (const std::optional<std::string> text =
+            uncached_text(element_id, result);
+        text.has_value()) {
+      result = result.with_text(*text);
+    }
     return result;
+  }
+
+  /// What a number, date, time or boolean cell shows where the file cached
+  /// no text for it: its value in its data style, else as `General`, and a
+  /// boolean as `write_result` writes it. LibreOffice formats the value when
+  /// it loads, so a row of sums saved without their text shows the sums
+  /// there. Nothing for a cell with text, and nothing for a positional cell:
+  /// the file states none, and a repeated cell's copies are positional, so
+  /// they stay empty.
+  [[nodiscard]] std::optional<std::string>
+  uncached_text(const ElementIdentifier element_id,
+                const CellValue &value) const {
+    if (!value.has_number() ||
+        (value.type() != ValueType::float_number &&
+         value.type() != ValueType::date && value.type() != ValueType::time &&
+         value.type() != ValueType::boolean)) {
+      return std::nullopt;
+    }
+    if (positional_id::holds(element_id) || states_text(get_node(element_id))) {
+      return std::nullopt;
+    }
+    if (value.type() == ValueType::boolean) {
+      return value.number() != 0 ? "TRUE" : "FALSE";
+    }
+    if (std::optional<std::string> shown =
+            shown_value(element_parent(element_id), element_id,
+                        sheet_cell_position(element_id), value);
+        shown.has_value()) {
+      return shown;
+    }
+    if (value.type() != ValueType::float_number) {
+      return std::nullopt;
+    }
+    return number_format::Format().format(
+        value.number(), number_format::Epoch::from_1900,
+        number_format::symbols_of(m_document->locale().value_or("")));
+  }
+
+  /// Whether @p node holds any text, a space or a tab, outside the comments
+  /// it carries.
+  [[nodiscard]] static bool states_text(const pugi::xml_node node) {
+    for (const pugi::xml_node child : node.children()) {
+      if (child.type() == pugi::node_pcdata ||
+          child.type() == pugi::node_cdata) {
+        if (*child.value() != '\0') {
+          return true;
+        }
+        continue;
+      }
+      const std::string_view name = child.name();
+      if (name == "text:s" || name == "text:tab") {
+        return true;
+      }
+      if (name != "office:annotation" && states_text(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Whether @p cell states a value, which LibreOffice shows whether or not
+  /// the file cached its text.
+  [[nodiscard]] static bool states_value(const pugi::xml_node cell) {
+    return cell.attribute("office:value") ||
+           cell.attribute("office:date-value") ||
+           cell.attribute("office:time-value") ||
+           cell.attribute("office:boolean-value");
   }
 
   [[nodiscard]] PageLayout
