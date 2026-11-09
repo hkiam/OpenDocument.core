@@ -34,6 +34,9 @@ The release run heads these entries with the version and opens a fresh
   ellipse; a hatch is an svg pattern, over its fill color where
   `draw:fill-hatch-solid` asks for it. Transparency gradients
   (`draw:opacity-name`) are still not read.
+- An odf shape whose styles state a fill color but no `draw:fill` is filled,
+  as LibreOffice fills it: producers leave the solid default unwritten. A
+  frame (`draw:frame`) still fills nothing unless told to.
 - An odf shape with `draw:shadow="visible"` casts its shadow, offset, colored,
   translucent and blurred as the style states. It cast none.
 - `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),

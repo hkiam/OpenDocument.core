@@ -220,3 +220,23 @@ TEST(OdfFill, a_visible_shadow_is_read_with_its_offsets_and_opacity) {
   EXPECT_EQ(shadow.color.alpha, 128);
   EXPECT_FALSE(styles.at(1).shadow.has_value());
 }
+
+TEST(OdfFill, a_shape_stating_no_fill_is_filled_and_a_frame_is_not) {
+  // As LibreOffice writes a Writer header's shape: a fill color, no
+  // `draw:fill`, the solid default left unwritten.
+  const std::string path = write_odg(
+      "odf_fill_default.odg",
+      R"(<style:style style:name="g" style:family="graphic">)"
+      R"(<style:graphic-properties draw:fill-color="#fffc00"/>)"
+      R"(</style:style>)",
+      rect("g") + R"(<draw:frame draw:style-name="g" svg:x="1cm" svg:y="1cm" )"
+                  R"(svg:width="4cm" svg:height="2cm"/>)");
+
+  const Document document = odr::open(path).as_document_file().document();
+  const std::vector<GraphicStyle> styles = styles_of(document);
+
+  ASSERT_TRUE(styles.at(0).fill_color.has_value());
+  EXPECT_EQ(styles.at(0).fill_color->alpha, 255);
+  ASSERT_TRUE(styles.at(1).fill_color.has_value());
+  EXPECT_EQ(styles.at(1).fill_color->alpha, 0);
+}
