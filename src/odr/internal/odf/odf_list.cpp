@@ -57,13 +57,29 @@ pugi::xml_node level_style_node(const pugi::xml_node list_style,
   return result;
 }
 
+/// The family a bullet is set in: its `style:font-name` names a font face,
+/// `fo:font-family` names the family itself.
+std::string bullet_font_family(const pugi::xml_node level_style,
+                               const StyleRegistry &styles) {
+  const pugi::xml_node properties = level_style.child("style:text-properties");
+  if (const pugi::xml_attribute font_name =
+          properties.attribute("style:font-name")) {
+    if (const pugi::xml_node font_face =
+            styles.font_face_node(font_name.value())) {
+      return font_face.attribute("svg:font-family").value();
+    }
+    return font_name.value();
+  }
+  return properties.attribute("fo:font-family").value();
+}
+
 /// Level @p level (counted from 0) of @p list_style. A number's label is the
 /// prefix, the numbers of the last `text:display-levels` levels joined by a
 /// period, and the suffix. A level without a format and the period after it
 /// are left out, and where the level itself has none, only prefix and suffix
 /// are, as LibreOffice's `SwNumRule::MakeNumString` does.
-ListLevel read_level(const pugi::xml_node list_style,
-                     const std::uint32_t level) {
+ListLevel read_level(const pugi::xml_node list_style, const std::uint32_t level,
+                     const StyleRegistry &styles) {
   ListLevel result;
 
   const pugi::xml_node level_style = level_style_node(list_style, level);
@@ -104,6 +120,10 @@ ListLevel read_level(const pugi::xml_node list_style,
   result.format = ListNumberFormat::bullet;
   if (name == "text:list-level-style-bullet") {
     result.label = level_style.attribute("text:bullet-char").value();
+  }
+  if (!result.label.empty()) {
+    result.label = resolve_bullet(result.label, level,
+                                  bullet_font_family(level_style, styles));
   }
   if (result.label.empty()) {
     // A bullet without a character, and the image variant, still want a mark.
@@ -161,17 +181,17 @@ private:
 
   [[nodiscard]] ListLevel level_at_(const std::string &style_name,
                                     const std::uint32_t level) const {
-    return read_level(m_styles->list_style_node(style_name), level);
+    return read_level(m_styles->list_style_node(style_name), level, *m_styles);
   }
 
   /// LibreOffice opens each level above @p level that no item has opened yet
   /// at its start, so an item that skips a level reads "1.1" and the next one
   /// on the skipped level is its second.
-  static void start_skipped_levels(ListCounter &counter,
-                                   const pugi::xml_node list_style,
-                                   const std::uint32_t level) {
+  void start_skipped_levels_(ListCounter &counter,
+                             const pugi::xml_node list_style,
+                             const std::uint32_t level) const {
     for (std::uint32_t skipped = 0; skipped < level; ++skipped) {
-      counter.start(skipped, read_level(list_style, skipped));
+      counter.start(skipped, read_level(list_style, skipped, *m_styles));
     }
   }
 
@@ -221,14 +241,14 @@ private:
     // the level sizes the counters, so a file must not choose it freely
     const std::uint32_t level = std::min(outline_level, max_outline_level) - 1;
 
-    ListLevel list_level = read_level(outline_style, level);
+    ListLevel list_level = read_level(outline_style, level, *m_styles);
     if (node.attribute("text:restart-numbering").as_bool()) {
       list_level.start =
           node.attribute("text:start-value").as_uint(list_level.start);
       m_outline.restart(level, 0);
     }
 
-    start_skipped_levels(m_outline, outline_style, level);
+    start_skipped_levels_(m_outline, outline_style, level);
     ListMarker marker;
     marker.text = m_outline.advance(level, list_level);
     if (!marker.text.empty()) {
@@ -271,8 +291,8 @@ private:
         counter.restart(level, 0);
       }
 
-      start_skipped_levels(counter, m_styles->list_style_node(style_name),
-                           level);
+      start_skipped_levels_(counter, m_styles->list_style_node(style_name),
+                            level);
       ListMarker marker;
       marker.text = counter.advance(level, list_level);
       if (is_ordered(list_level.format)) {
