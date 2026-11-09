@@ -1,5 +1,7 @@
 #pragma once
 
+#include <odr/quantity.hpp>
+
 #include <optional>
 #include <string>
 #include <string_view>
@@ -61,6 +63,21 @@ std::string translate_table_row_style(const TableRowStyle &table_row_style);
 std::string translate_table_cell_style(const TableCellStyle &table_cell_style,
                                        bool dark_fill);
 std::string translate_drawing_style(const GraphicStyle &graphic_style);
+/// The css paint of a gradient or hatch fill: a `background-image`, empty
+/// where the fill is solid or none. A radial gradient needs the box's size to
+/// be the circle LibreOffice draws.
+std::string translate_fill_image(const GraphicStyle &graphic_style,
+                                 const std::optional<Measure> &width = {},
+                                 const std::optional<Measure> &height = {});
+/// The shadow a shape casts, empty where none: a drop shadow for the svg and
+/// the fill layer of a shape, which sit under the page's own stacking order
+/// (a filter on the shape's box would lift them out of it), or with @p box a
+/// box shadow for a plain frame.
+std::string translate_shadow(const GraphicStyle &graphic_style, bool box);
+/// A css mask that keeps only what @p svg_shape, an svg element in a
+/// `preserveAspectRatio="none"` view box @p view_box, covers.
+std::string translate_fill_mask(std::string_view view_box,
+                                std::string_view svg_shape);
 /// Empty for a transform that moves nothing.
 std::string
 translate_drawing_transform(const std::optional<DrawingTransform> &transform);

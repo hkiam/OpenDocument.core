@@ -52,6 +52,9 @@ private:
 
   pugi::xml_document m_content_xml;
   pugi::xml_document m_styles_xml;
+  /// `meta:generator`, the application that wrote the file ([ODF 1.2]
+  /// 4.3.2.1), read once for what depends on it.
+  std::string m_generator;
   /// The parts besides `content.xml` that `save` writes back.
   std::unordered_map<AbsPath, pugi::xml_document> m_parts;
 

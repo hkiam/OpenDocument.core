@@ -61,14 +61,18 @@ private:
                                        TableRowStyle &result);
   static void resolve_table_cell_style_(pugi::xml_node node,
                                         TableCellStyle &result);
-  static void resolve_graphic_style_(pugi::xml_node node, GraphicStyle &result);
+  static void resolve_graphic_style_(const StyleRegistry *registry,
+                                     pugi::xml_node node, GraphicStyle &result);
 };
 
 class StyleRegistry final {
 public:
   StyleRegistry();
+  /// @p gradient_angles_in_tenths: the producer wrote a unitless gradient
+  /// `draw:angle` in tenths of a degree.
   StyleRegistry(Document &document, pugi::xml_node content_root,
-                pugi::xml_node styles_root);
+                pugi::xml_node styles_root,
+                bool gradient_angles_in_tenths = false);
 
   [[nodiscard]] Style *style(const char *name) const;
   /// The data style (`number:number-style` and its kin) named @p name, null
@@ -86,6 +90,23 @@ public:
   [[nodiscard]] pugi::xml_node font_face_node(const std::string &name) const;
 
   [[nodiscard]] pugi::xml_node list_style_node(const std::string &name) const;
+
+  /// The `draw:gradient` named @p name, null where there is none.
+  [[nodiscard]] pugi::xml_node gradient_node(const std::string &name) const;
+  /// The `draw:hatch` named @p name, null where there is none.
+  [[nodiscard]] pugi::xml_node hatch_node(const std::string &name) const;
+  /// The graphic property @p name as @p style states it, else as its nearest
+  /// base or the `graphic` default style does; null where none does.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
+                                                      const char *name) const;
+  /// The same for the style named @p style_name.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
+                                                      const char *name) const;
+  /// Whether a gradient angle without a unit counts tenths of a degree, as
+  /// the document's producer wrote it.
+  [[nodiscard]] bool gradient_angles_in_tenths() const {
+    return m_gradient_angles_in_tenths;
+  }
 
   [[nodiscard]] ElementIdentifier master_page(const std::string &name) const;
   [[nodiscard]] ElementIdentifier first_master_page() const;
@@ -125,6 +146,9 @@ private:
   std::unordered_map<std::string, pugi::xml_node> m_index_outline_style;
   std::unordered_map<std::string, pugi::xml_node> m_index_page_layout;
   std::unordered_map<std::string, pugi::xml_node> m_index_master_page;
+  std::unordered_map<std::string, pugi::xml_node> m_index_gradient;
+  std::unordered_map<std::string, pugi::xml_node> m_index_hatch;
+  bool m_gradient_angles_in_tenths{false};
   std::optional<std::string> m_first_master_page;
 
   std::unordered_map<std::string, std::unique_ptr<Style>> m_default_styles;

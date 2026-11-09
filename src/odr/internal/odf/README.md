@@ -82,8 +82,15 @@ variants. Design and open work are in [`AGENTS.md`](AGENTS.md). Relies on
     - [ ] `draw:handle` (the interactive control points)
     - [ ] `F` / `S`: one subpath painted differently from the rest
   - [x] graphic style: stroke width/color, fill color, vertical align, text wrap
-  - [ ] gradient and hatch fills, `draw:opacity` / `draw:opacity-name`, and the
-    dash a `draw:stroke` names
+  - [x] gradient fills (`draw:gradient`; square and rectangular drawn as the
+    ellipse, an ellipsoid not turned by `draw:angle`) and hatch fills
+    (`draw:hatch`, with `draw:fill-hatch-solid`)
+  - [ ] `draw:gradient-step-count`, multi-color gradients
+    (`loext:gradient-stop`)
+  - [ ] `draw:opacity` / `draw:opacity-name`, and the dash a `draw:stroke`
+    names
+  - [x] shadows (`draw:shadow`, its offsets, color, opacity and
+    `loext:shadow-blur`)
   - [ ] arrowheads (`draw:marker`, `draw:marker-start` / `-end`)
   - [x] transform (`draw:transform`, its operation list composed to one matrix)
   - [ ] mirror (`style:mirror`, and `draw:mirror-*` on a shape with no
