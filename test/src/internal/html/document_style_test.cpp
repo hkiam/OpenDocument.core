@@ -201,3 +201,19 @@ TEST(html_document_style, drawing_transform_writes_the_linear_part_last) {
             "transform:translate(1cm,2cm) matrix(0,1,-1,0,0,0);"
             "transform-origin:0 0;");
 }
+
+TEST(html_document_style, drawing_style_draws_a_zero_width_as_a_hairline) {
+  GraphicStyle style;
+  style.stroke_width = Measure("0cm");
+  style.stroke_color = Color(128, 128, 128);
+  EXPECT_EQ(ihtml::translate_drawing_style(style),
+            "stroke-width:1px;stroke:#808080;");
+}
+
+TEST(html_document_style, drawing_style_draws_no_stroke_turned_off) {
+  GraphicStyle style;
+  style.stroke_width = Measure("0.1cm");
+  style.stroke_color = Color(128, 128, 128, 0);
+  EXPECT_EQ(ihtml::translate_drawing_style(style),
+            "stroke-width:0.1cm;stroke:none;");
+}
