@@ -31,6 +31,9 @@ The release run heads these entries with the version and opens a fresh
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
+- The headings of an odt are numbered after its `text:outline-style`, "1",
+  "1.1", "1.2.1", as Word and LibreOffice number chapters. The new
+  `Paragraph::marker` returns that number, empty for any other paragraph.
 
 ## v7.7.0 - 2026-10-31
 

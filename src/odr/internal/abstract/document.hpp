@@ -489,6 +489,12 @@ public:
   paragraph_style(ElementIdentifier element_id) const = 0;
   [[nodiscard]] virtual TextStyle
   paragraph_text_style(ElementIdentifier element_id) const = 0;
+  /// The number of a heading in a numbered outline, "1.2", resolved against
+  /// the headings before it. Empty for any other paragraph.
+  [[nodiscard]] virtual std::string
+  paragraph_marker([[maybe_unused]] const ElementIdentifier element_id) const {
+    return {};
+  }
   /// Writes `text_align` of @p style, which is set, on the paragraph.
   virtual void
   paragraph_set_style([[maybe_unused]] const ElementIdentifier element_id,
