@@ -99,6 +99,21 @@ beside it. So the fill state rides in the resolved colour's alpha. `draw:fill`
 sets it, `draw:fill-color` sets the rgb and keeps it, and `draw:fill` defaults
 to none, so a colour with no fill anywhere in the chain paints nothing.
 
+**A page box carries the header and footer of its master page.** With
+`text_document_margin` a box is a run between breaks, not a page, so a header
+written once per box is the closest the boxes come. The first box takes the
+first content's master page; a paragraph naming one opens a box of it, as it
+opens a page in LibreOffice (20.283); any other box takes the previous one's
+`style:next-style-name`. A box opening a run of its master page takes the
+first page's header and footer where they differ. They are variants of the
+header and footer, so a page with none has no first one either, and naming
+the master page in use again opens a page, not a run. A later box whose
+layout states no width or height takes the first box's and keeps its own
+margins. LibreOffice's header height holds the spacing to the body
+(`fo:min-height` is `PROP_HeaderHeight`), so the box is `border-box`. The
+header and footer repeat per box and belong to `styles.xml`, so they carry no
+editing address.
+
 **A flat document is the same `Document`, minus the package.** Its
 `office:document` root carries what `content.xml` and `styles.xml` carry
 between them, so the flat constructor passes that root as both roots. Images
