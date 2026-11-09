@@ -586,6 +586,26 @@ using AdapterBase = internal::RegistryElementAdapter<
 /// LibreOffice's fill of a shape that states no colour.
 Color default_shape_fill_color() { return {0x72, 0x9f, 0xcf}; }
 
+/// The paper a layout stating no size takes: the application's, which
+/// LibreOffice takes from the locale (Letter in the US). With no locale to
+/// ask, A4 portrait, which LibreOffice keeps for a landscape layout too.
+constexpr double default_paper_width_cm = 21;
+constexpr double default_paper_height_cm = 29.7;
+
+/// @p layout with the default paper's width and height where it states none,
+/// each on its own as LibreOffice's `XMLPageMasterContext` completes them; so
+/// a text page has a width to set its lines in and a drawing page a box to
+/// hold its shapes. A sheet keeps none, and prints to the printer's paper.
+PageLayout with_default_paper(PageLayout layout) {
+  if (!layout.width.has_value()) {
+    layout.width = Measure(default_paper_width_cm, DynamicUnit("cm"));
+  }
+  if (!layout.height.has_value()) {
+    layout.height = Measure(default_paper_height_cm, DynamicUnit("cm"));
+  }
+  return layout;
+}
+
 class ElementAdapter final : public AdapterBase {
 public:
   ElementAdapter(Document &document, ElementRegistry &registry)
@@ -609,10 +629,14 @@ public:
     if (const ElementIdentifier master_page_id =
             text_root_first_master_page(element_id);
         master_page_id != null_element_id) {
-      return master_page_page_layout(master_page_id);
+      return with_default_paper(master_page_page_layout(master_page_id));
     }
+    // no master page at all: the text flows on no paper, and prints to the
+    // printer's, as `html.a_text_page_with_a_frame_on_the_page_prints_whole`
+    // asks
     return {};
   }
+
   static bool is_anchored_frame(const pugi::xml_node node) {
     return std::strcmp(node.name(), "draw:frame") == 0;
   }
@@ -682,9 +706,9 @@ public:
   page_layout(const ElementIdentifier element_id) const override {
     if (const ElementIdentifier master_page_id = page_master_page(element_id);
         master_page_id != null_element_id) {
-      return master_page_page_layout(master_page_id);
+      return with_default_paper(master_page_page_layout(master_page_id));
     }
-    return {};
+    return with_default_paper({});
   }
   [[nodiscard]] ElementIdentifier
   page_master_page(const ElementIdentifier element_id) const override {
