@@ -96,6 +96,9 @@ public:
   /// base or the `graphic` default style does; null where none does.
   [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
                                                       const char *name) const;
+  /// The same for the style named @p style_name.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
+                                                      const char *name) const;
 
   [[nodiscard]] ElementIdentifier master_page(const std::string &name) const;
   [[nodiscard]] ElementIdentifier first_master_page() const;

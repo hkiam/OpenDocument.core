@@ -1279,6 +1279,13 @@ pugi::xml_node StyleRegistry::hatch_node(const std::string &name) const {
   return it == std::end(m_index_hatch) ? pugi::xml_node() : it->second;
 }
 
+pugi::xml_attribute StyleRegistry::graphic_attribute(const char *style_name,
+                                                     const char *name) const {
+  const auto it = m_index_style.find(style_name);
+  return graphic_attribute(
+      it == std::end(m_index_style) ? pugi::xml_node() : it->second, name);
+}
+
 pugi::xml_attribute StyleRegistry::graphic_attribute(const pugi::xml_node style,
                                                      const char *name) const {
   pugi::xml_node node = style;

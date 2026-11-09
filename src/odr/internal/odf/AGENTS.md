@@ -97,7 +97,11 @@ is dropped when the parent states none.
 independently, and LibreOffice writes a `draw:fill-color` with no `draw:fill`
 beside it. So the fill state rides in the resolved colour's alpha. `draw:fill`
 sets it, `draw:fill-color` sets the rgb and keeps it, and `draw:fill` defaults
-to none, so a colour with no fill anywhere in the chain paints nothing.
+to none, so a colour with no fill anywhere in the chain paints nothing. Except
+on a shape: producers leave the solid default unwritten (AOO i112205), so
+`frame_style` fills a shape whose chain states no `draw:fill`. A `draw:frame`
+keeps none. A gradient or hatch name, and `draw:shadow` with its offsets,
+cascade the same way and are read through `StyleRegistry::graphic_attribute`.
 
 **A flat document is the same `Document`, minus the package.** Its
 `office:document` root carries what `content.xml` and `styles.xml` carry

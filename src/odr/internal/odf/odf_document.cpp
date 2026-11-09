@@ -2186,7 +2186,19 @@ public:
   }
   [[nodiscard]] GraphicStyle
   frame_style(const ElementIdentifier element_id) const override {
-    return get_intermediate_style(element_id).graphic_style;
+    GraphicStyle result = get_intermediate_style(element_id).graphic_style;
+    // A shape whose styles state no `draw:fill` is filled: producers write it
+    // only where it differs from solid (AOO i112205). A frame is a box, and
+    // fills nothing unless told to.
+    if (frame_shape_type(element_id) != ShapeType::none &&
+        result.fill_color.has_value() && result.fill_color->alpha == 0 &&
+        !result.fill_gradient.has_value() && !result.fill_hatch.has_value() &&
+        !m_document->style_registry().graphic_attribute(
+            get_node(element_id).attribute("draw:style-name").value(),
+            "draw:fill")) {
+      result.fill_color->alpha = 255;
+    }
+    return result;
   }
 
   [[nodiscard]] bool
