@@ -68,8 +68,11 @@ private:
 class StyleRegistry final {
 public:
   StyleRegistry();
+  /// @p gradient_angles_in_tenths: the producer wrote a unitless gradient
+  /// `draw:angle` in tenths of a degree.
   StyleRegistry(Document &document, pugi::xml_node content_root,
-                pugi::xml_node styles_root);
+                pugi::xml_node styles_root,
+                bool gradient_angles_in_tenths = false);
 
   [[nodiscard]] Style *style(const char *name) const;
   /// The data style (`number:number-style` and its kin) named @p name, null
@@ -97,6 +100,9 @@ public:
   [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
                                                       const char *name) const;
   /// The same for the style named @p style_name.
+  [[nodiscard]] bool gradient_angles_in_tenths() const {
+    return m_gradient_angles_in_tenths;
+  }
   [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
                                                       const char *name) const;
 
@@ -140,6 +146,7 @@ private:
   std::unordered_map<std::string, pugi::xml_node> m_index_master_page;
   std::unordered_map<std::string, pugi::xml_node> m_index_gradient;
   std::unordered_map<std::string, pugi::xml_node> m_index_hatch;
+  bool m_gradient_angles_in_tenths{false};
   std::optional<std::string> m_first_master_page;
 
   std::unordered_map<std::string, std::unique_ptr<Style>> m_default_styles;

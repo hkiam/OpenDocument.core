@@ -292,16 +292,16 @@ struct GraphicStyle final {
   std::optional<Color> stroke_color;
   /// The solid fill; behind @ref fill_hatch where the hatch is solid.
   std::optional<Color> fill_color;
+  std::optional<VerticalAlign> vertical_align;
+  std::optional<TextWrap> text_wrap;
+  /// The side a frame sits on; unset where its offset decides instead.
+  std::optional<HorizontalAlign> horizontal_position;
   /// Set where `draw:fill` is `gradient`; paints over @ref fill_color.
   std::optional<GradientFill> fill_gradient;
   /// Set where `draw:fill` is `hatch`.
   std::optional<HatchFill> fill_hatch;
   /// Set where `draw:shadow` is `visible`.
   std::optional<Shadow> shadow;
-  std::optional<VerticalAlign> vertical_align;
-  std::optional<TextWrap> text_wrap;
-  /// The side a frame sits on; unset where its offset decides instead.
-  std::optional<HorizontalAlign> horizontal_position;
 
   void override(const GraphicStyle &other);
 };

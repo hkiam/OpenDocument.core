@@ -229,11 +229,11 @@ TEST(html_document_style, fill_image_mirrors_an_axial_gradient) {
                                      .start_color = Color(255, 0, 0),
                                      .end_color = Color(0, 0, 255)};
   EXPECT_EQ(ihtml::translate_fill_image(style),
-            "background-image:linear-gradient(180deg,#ff0000 0%,#0000ff "
-            "50%,#ff0000 100%);");
+            "background-image:linear-gradient(180deg,#0000ff 0%,#ff0000 "
+            "50%,#0000ff 100%);");
 }
 
-TEST(html_document_style, fill_image_reaches_a_radial_gradient_to_the_corner) {
+TEST(html_document_style, fill_image_without_a_size_draws_radial_as_ellipse) {
   GraphicStyle style;
   style.fill_gradient = GradientFill{.style = GradientStyle::radial,
                                      .start_color = Color(128, 0, 0),
@@ -275,6 +275,39 @@ TEST(html_document_style, drawing_style_casts_a_shadow_as_a_drop_shadow) {
                         .offset_y = Measure("0.1cm"),
                         .color = Color(128, 128, 128),
                         .blur = Measure("0cm")};
-  EXPECT_EQ(ihtml::translate_drawing_style(style),
+  EXPECT_EQ(ihtml::translate_drawing_style(style), "");
+  EXPECT_EQ(ihtml::translate_shadow(style, false),
             "filter:drop-shadow(0.2cm 0.1cm 0cm #808080);");
+  EXPECT_EQ(ihtml::translate_shadow(style, true),
+            "box-shadow:0.2cm 0.1cm 0cm #808080;");
+}
+
+TEST(html_document_style, fill_image_draws_a_radial_gradient_as_a_circle) {
+  GraphicStyle style;
+  style.fill_gradient = GradientFill{.style = GradientStyle::radial,
+                                     .start_color = Color(128, 0, 0),
+                                     .end_color = Color(255, 255, 0)};
+  // half the diagonal of a 300 x 400 px box
+  EXPECT_EQ(
+      ihtml::translate_fill_image(style, Measure("300px"), Measure("400px")),
+      "background-image:radial-gradient(circle 250px at 50% "
+      "50%,#ffff00 0%,#800000 100%);");
+}
+
+TEST(html_document_style, fill_image_turns_the_third_hatch_back_by_45) {
+  GraphicStyle style;
+  style.fill_hatch = HatchFill{.style = HatchStyle::triple,
+                               .color = Color(0, 0, 0),
+                               .distance = Measure("0.1cm"),
+                               .rotation = 0};
+  const std::string image = ihtml::translate_fill_image(style);
+  EXPECT_NE(image.find("rotate%28-90%29"), std::string::npos);
+  EXPECT_NE(image.find("rotate%2845%29"), std::string::npos);
+}
+
+TEST(html_document_style, fill_image_holds_a_hatch_to_two_pixels) {
+  GraphicStyle style;
+  style.fill_hatch = HatchFill{.distance = Measure("0.00001cm")};
+  EXPECT_NE(ihtml::translate_fill_image(style).find("width=%222px%22"),
+            std::string::npos);
 }

@@ -83,7 +83,10 @@ variants. Design and open work are in [`AGENTS.md`](AGENTS.md). Relies on
     - [ ] `F` / `S`: one subpath painted differently from the rest
   - [x] graphic style: stroke width/color, fill color, vertical align, text wrap
   - [x] gradient fills (`draw:gradient`; square and rectangular drawn as the
-    ellipse) and hatch fills (`draw:hatch`, with `draw:fill-hatch-solid`)
+    ellipse, an ellipsoid not turned by `draw:angle`) and hatch fills
+    (`draw:hatch`, with `draw:fill-hatch-solid`)
+  - [ ] `draw:gradient-step-count`, multi-color gradients
+    (`loext:gradient-stop`)
   - [ ] `draw:opacity` / `draw:opacity-name`, and the dash a `draw:stroke`
     names
   - [x] shadows (`draw:shadow`, its offsets, color, opacity and

@@ -100,8 +100,21 @@ sets it, `draw:fill-color` sets the rgb and keeps it, and `draw:fill` defaults
 to none, so a colour with no fill anywhere in the chain paints nothing. Except
 on a shape: producers leave the solid default unwritten (AOO i112205), so
 `frame_style` fills a shape whose chain states no `draw:fill`. A `draw:frame`
-keeps none. A gradient or hatch name, and `draw:shadow` with its offsets,
+keeps none. That is a heuristic: LibreOffice fills a text frame whose chain
+ends at the default style too, and leaves empty only one reaching its
+built-in `Frame` or `Graphics` styles, which LibreOffice's own files do. A gradient or hatch name, and `draw:shadow` with its offsets,
 cascade the same way and are read through `StyleRegistry::graphic_attribute`.
+`frame_style` takes the shadow from the element's own style, so a shadow on a
+frame is not cast again by what it holds.
+
+**Gradients and hatches follow LibreOffice, not the spec's wording.** ODF
+19.218.2 and 19.209 describe the radial colors and the hatch rotation the
+other way round from what every producer writes and LibreOffice draws
+(`basegfx/source/tools/gradienttools.cxx`,
+`drawinglayer/source/primitive2d/fillhatchprimitive2d.cxx`). A unitless
+gradient `draw:angle` is in degrees (18.3.1) except from the producers
+LibreOffice reads as tenths (`gradient_angles_in_tenths`); a unitless hatch
+`draw:rotation` is always tenths (tdf#161327).
 
 **A flat document is the same `Document`, minus the package.** Its
 `office:document` root carries what `content.xml` and `styles.xml` carry

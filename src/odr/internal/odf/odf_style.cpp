@@ -2,6 +2,7 @@
 
 #include <odr/internal/odf/odf_document.hpp>
 #include <odr/internal/odf/odf_parser.hpp>
+#include <odr/internal/util/number_util.hpp>
 #include <odr/internal/xml/xml_util.hpp>
 
 #include <algorithm>
@@ -330,34 +331,45 @@ void read_font_face(const char *name, const pugi::xml_node node,
   result.font_name = node.attribute("svg:font-family").value();
 }
 
+/// A finite number leading @p text, and the rest; nothing where none leads.
+std::optional<std::pair<double, std::string_view>>
+read_number(const std::string_view text) {
+  const std::size_t end = text.find_first_not_of("+-.0123456789eE");
+  const std::optional<double> number = util::number::parse(text.substr(0, end));
+  if (!number.has_value() || !std::isfinite(*number)) {
+    return std::nullopt;
+  }
+  return std::pair{*number, end == std::string_view::npos ? std::string_view()
+                                                          : text.substr(end)};
+}
+
 /// A fraction from a percentage such as `20%`; @p fallback where unstated.
 double read_fraction(const pugi::xml_attribute attribute,
                      const double fallback) {
-  if (!attribute) {
-    return fallback;
-  }
-  char *end = nullptr;
-  const double value = std::strtod(attribute.value(), &end);
-  return end == attribute.value() ? fallback : value / 100.0;
+  const auto number = read_number(attribute.value());
+  return number.has_value() ? number->first / 100.0 : fallback;
 }
 
-/// An angle in degrees. Unitless, it is in tenths of a degree, as LibreOffice
-/// writes `draw:angle` and `draw:rotation` (ODF 1.2 errata).
-double read_tenths_angle(const pugi::xml_attribute attribute) {
-  const char *value = attribute.value();
-  char *end = nullptr;
-  const double number = std::strtod(value, &end);
-  if (end == value) {
+/// [OpenDocument] 18.3.1 `angle`: degrees, or the unit it names. Unitless,
+/// LibreOffice writes and reads tenths of a degree where @p tenths says so:
+/// always for a hatch's `draw:rotation`, for a gradient's `draw:angle` from
+/// the producers that wrote it so (`gradient_angles_in_tenths`).
+double read_angle(const pugi::xml_attribute attribute, const bool tenths) {
+  const auto number = read_number(attribute.value());
+  if (!number.has_value()) {
     return 0;
   }
-  if (const std::string_view unit = end; unit == "deg") {
-    return number;
-  } else if (unit == "rad") {
-    return number * 180.0 / std::numbers::pi;
-  } else if (unit == "grad") {
-    return number * 0.9;
+  const auto [value, unit] = *number;
+  if (unit == "deg") {
+    return value;
   }
-  return number / 10.0;
+  if (unit == "rad") {
+    return value * 180.0 / std::numbers::pi;
+  }
+  if (unit == "grad") {
+    return value * 0.9;
+  }
+  return tenths ? value / 10.0 : value;
 }
 
 /// @p color scaled by an intensity such as `80%`.
@@ -369,7 +381,8 @@ Color read_intensity(const Color color, const pugi::xml_attribute intensity) {
   return {scale(color.red), scale(color.green), scale(color.blue), color.alpha};
 }
 
-std::optional<GradientFill> read_gradient(const pugi::xml_node node) {
+std::optional<GradientFill> read_gradient(const pugi::xml_node node,
+                                          const bool angle_in_tenths) {
   if (!node) {
     return {};
   }
@@ -392,7 +405,7 @@ std::optional<GradientFill> read_gradient(const pugi::xml_node node) {
   result.end_color = read_intensity(read_color(node.attribute("draw:end-color"))
                                         .value_or(Color(255, 255, 255)),
                                     node.attribute("draw:end-intensity"));
-  result.angle = read_tenths_angle(node.attribute("draw:angle"));
+  result.angle = read_angle(node.attribute("draw:angle"), angle_in_tenths);
   result.border =
       std::clamp(read_fraction(node.attribute("draw:border"), 0.0), 0.0, 1.0);
   result.center_x =
@@ -408,7 +421,8 @@ std::optional<HatchFill> read_hatch(const pugi::xml_node node) {
   }
   const std::optional<Measure> distance =
       read_measure(node.attribute("draw:distance"));
-  if (!distance.has_value() || distance->magnitude() <= 0) {
+  if (!distance.has_value() || !(distance->magnitude() > 0) ||
+      !std::isfinite(distance->magnitude())) {
     return {};
   }
   HatchFill result;
@@ -420,7 +434,10 @@ std::optional<HatchFill> read_hatch(const pugi::xml_node node) {
   }
   result.color = read_color(node.attribute("draw:color")).value_or(Color());
   result.distance = *distance;
-  result.rotation = read_tenths_angle(node.attribute("draw:rotation"));
+  // LibreOffice: unitless `draw:rotation` is tenths, whoever wrote it
+  // (tdf#161327); counterclockwise from horizontal, against [OpenDocument]
+  // 19.209's wording
+  result.rotation = read_angle(node.attribute("draw:rotation"), true);
   return result;
 }
 
@@ -749,12 +766,14 @@ void Style::resolve_graphic_style_(const StyleRegistry *registry,
             .value_or(Measure(fallback));
       };
       Shadow shadow;
-      shadow.offset_x = measure("draw:shadow-offset-x", "0.2cm");
-      shadow.offset_y = measure("draw:shadow-offset-y", "0.2cm");
+      // LibreOffice's item defaults; the 0.2cm grey of its documents comes
+      // from their default style, which states it
+      shadow.offset_x = measure("draw:shadow-offset-x", "0cm");
+      shadow.offset_y = measure("draw:shadow-offset-y", "0cm");
       shadow.blur = measure("loext:shadow-blur", "0cm");
       shadow.color =
           read_color(registry->graphic_attribute(node, "draw:shadow-color"))
-              .value_or(Color(128, 128, 128));
+              .value_or(Color(0, 0, 0));
       shadow.color.alpha = static_cast<std::uint8_t>(std::lround(
           255 * std::clamp(read_fraction(registry->graphic_attribute(
                                              node, "draw:shadow-opacity"),
@@ -771,9 +790,11 @@ void Style::resolve_graphic_style_(const StyleRegistry *registry,
     result.fill_gradient.reset();
     result.fill_hatch.reset();
     if (fill == "gradient") {
-      result.fill_gradient = read_gradient(registry->gradient_node(
-          registry->graphic_attribute(node, "draw:fill-gradient-name")
-              .value()));
+      result.fill_gradient = read_gradient(
+          registry->gradient_node(
+              registry->graphic_attribute(node, "draw:fill-gradient-name")
+                  .value()),
+          registry->gradient_angles_in_tenths());
     } else if (fill == "hatch") {
       result.fill_hatch = read_hatch(registry->hatch_node(
           registry->graphic_attribute(node, "draw:fill-hatch-name").value()));
@@ -807,7 +828,9 @@ StyleRegistry::StyleRegistry() = default;
 
 StyleRegistry::StyleRegistry(Document &document,
                              const pugi::xml_node content_root,
-                             const pugi::xml_node styles_root) {
+                             const pugi::xml_node styles_root,
+                             const bool gradient_angles_in_tenths)
+    : m_gradient_angles_in_tenths{gradient_angles_in_tenths} {
   generate_indices_(content_root, styles_root);
   generate_styles_();
   generate_master_pages_(document);

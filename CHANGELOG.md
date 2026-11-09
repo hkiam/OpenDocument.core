@@ -26,19 +26,27 @@ The release run heads these entries with the version and opens a fresh
   and iOS, for example `server bind failed: 127.0.0.1:29665 (Address already
   in use)`.
 
-### Rendering
+### Text documents and presentations
 
 - An odf shape or text box filled with a gradient or a hatch
-  (`draw:fill="gradient"` / `"hatch"`) is painted. It was left empty. The
-  six gradient styles map to css gradients, square and rectangular ones to the
-  ellipse; a hatch is an svg pattern, over its fill color where
-  `draw:fill-hatch-solid` asks for it. Transparency gradients
-  (`draw:opacity-name`) are still not read.
+  (`draw:fill="gradient"` / `"hatch"`) is painted, with LibreOffice's
+  geometry: an axial gradient has its start color on the axis, a radial one is
+  a circle reaching half the box's diagonal, square and rectangular ones are
+  drawn as the ellipsoid. A unitless `draw:angle` is in degrees, or in tenths
+  of a degree from the producers that wrote it so (ODF below 1.2,
+  OpenOffice.org, LibreOffice before 7), as LibreOffice reads it. A hatch is
+  an svg pattern, over its fill color where `draw:fill-hatch-solid` asks for
+  it. Multi-color and transparency gradients (`loext:gradient-stop`,
+  `draw:opacity-name`) are not read.
 - An odf shape whose styles state a fill color but no `draw:fill` is filled,
   as LibreOffice fills it: producers leave the solid default unwritten. A
   frame (`draw:frame`) still fills nothing unless told to.
 - An odf shape with `draw:shadow="visible"` casts its shadow, offset, colored,
-  translucent and blurred as the style states. It cast none.
+  translucent and blurred as its style states, a frame a box shadow.
+- The dark sheet clears a gradient or hatch as it clears a solid fill.
+
+### API, files and saving
+
 - `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
   `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
 
