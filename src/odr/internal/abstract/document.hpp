@@ -508,9 +508,15 @@ public:
   paragraph_text_style(ElementIdentifier element_id) const = 0;
   /// The master page whose page this paragraph opens; null where it names
   /// none.
-  [[nodiscard]] virtual ElementIdentifier
-  paragraph_master_page([[maybe_unused]] ElementIdentifier element_id) const {
+  [[nodiscard]] virtual ElementIdentifier paragraph_master_page(
+      [[maybe_unused]] const ElementIdentifier element_id) const {
     return null_element_id;
+  }
+  /// The number of a heading in a numbered outline, "1.2", resolved against
+  /// the headings before it. Empty for any other paragraph.
+  [[nodiscard]] virtual std::string
+  paragraph_marker([[maybe_unused]] const ElementIdentifier element_id) const {
+    return {};
   }
   /// Writes `text_align` of @p style, which is set, on the paragraph.
   virtual void

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace odr::internal {
@@ -22,7 +23,8 @@ enum class ListNumberFormat {
 ///
 /// `label` is OOXML's `w:lvlText`: literal text in which `%N` stands for the
 /// counter of level N, counted from 1. ODF has no such template — its
-/// prefix / suffix / `text:display-levels` compose into one.
+/// prefix / suffix / `text:display-levels` compose into one, and as it has a
+/// tenth level, `%{N}` stands for level N too.
 struct ListLevel final {
   ListNumberFormat format{ListNumberFormat::none};
   std::string label;
@@ -37,6 +39,17 @@ struct ListMarker final {
 
 std::string format_list_number(ListNumberFormat format, std::uint32_t number);
 
+/// A bullet character in Unicode. Word sets its bullets in Symbol, Wingdings
+/// or Zapf Dingbats, at a private-use code point U+F020 to U+F0FF or at the
+/// font's byte, 0x20 to 0xFF, and either shows wrong in any other font.
+/// @p font_family is the family the bullet is set in, or empty if it is
+/// unknown. As LibreOffice does, such a character in one of these fonts maps
+/// to Unicode by the font's table; one without a mapping, a private-use
+/// character in any other font, and an empty or malformed @p text give a
+/// default for @p level (counted from 0).
+std::string resolve_bullet(const std::string &text, std::uint32_t level,
+                           std::string_view font_family = {});
+
 /// The counters of one list, indexed by level.
 class ListCounter final {
 public:
@@ -48,6 +61,10 @@ public:
   [[nodiscard]] std::uint32_t number(std::uint32_t level) const;
 
   void restart(std::uint32_t level, std::uint32_t number);
+
+  /// Opens `level` at its start, unless it is open already, without counting
+  /// an item on it.
+  void start(std::uint32_t level, const ListLevel &list_level);
 
 private:
   std::vector<std::optional<std::uint32_t>> m_numbers;

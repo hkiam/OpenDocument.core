@@ -1323,10 +1323,22 @@ pugi::xml_node StyleRegistry::font_face_node(const std::string &name) const {
   return {};
 }
 
+pugi::xml_node StyleRegistry::outline_style_node() const {
+  // ODF allows one; a second, which no producer writes, is ignored
+  return m_index_outline_style.empty()
+             ? pugi::xml_node()
+             : std::begin(m_index_outline_style)->second;
+}
+
 pugi::xml_node StyleRegistry::list_style_node(const std::string &name) const {
   if (const auto list_style_it = m_index_list_style.find(name);
       list_style_it != std::end(m_index_list_style)) {
     return list_style_it->second;
+  }
+  // a list may number by the outline, which it names like a list style
+  if (const auto outline_style_it = m_index_outline_style.find(name);
+      outline_style_it != std::end(m_index_outline_style)) {
+    return outline_style_it->second;
   }
   return {};
 }
