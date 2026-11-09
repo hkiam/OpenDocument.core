@@ -313,3 +313,19 @@ TEST(html_document_style, fill_image_holds_a_hatch_to_two_pixels) {
   EXPECT_NE(ihtml::translate_fill_image(style).find("width=%222px%22"),
             std::string::npos);
 }
+
+TEST(html_document_style, drawing_style_draws_a_zero_width_as_a_hairline) {
+  GraphicStyle style;
+  style.stroke_width = Measure("0cm");
+  style.stroke_color = Color(128, 128, 128);
+  EXPECT_EQ(ihtml::translate_drawing_style(style),
+            "stroke-width:1px;stroke:#808080;");
+}
+
+TEST(html_document_style, drawing_style_draws_no_stroke_turned_off) {
+  GraphicStyle style;
+  style.stroke_width = Measure("0.1cm");
+  style.stroke_color = Color(128, 128, 128, 0);
+  EXPECT_EQ(ihtml::translate_drawing_style(style),
+            "stroke-width:0.1cm;stroke:none;");
+}
