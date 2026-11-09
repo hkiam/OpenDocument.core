@@ -269,3 +269,13 @@ TEST(html_document_style, fill_mask_scales_the_shape_to_the_box) {
   EXPECT_NE(mask.find("preserveAspectRatio=%22none%22"), std::string::npos);
   EXPECT_NE(mask.find("mask-size:100% 100%;"), std::string::npos);
 }
+
+TEST(html_document_style, drawing_style_casts_a_shadow_as_a_drop_shadow) {
+  GraphicStyle style;
+  style.shadow = Shadow{.offset_x = Measure("0.2cm"),
+                        .offset_y = Measure("0.1cm"),
+                        .color = Color(128, 128, 128),
+                        .blur = Measure("0cm")};
+  EXPECT_EQ(ihtml::translate_drawing_style(style),
+            "filter:drop-shadow(0.2cm 0.1cm 0cm #808080);");
+}

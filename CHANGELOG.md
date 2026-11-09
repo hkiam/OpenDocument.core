@@ -34,8 +34,10 @@ The release run heads these entries with the version and opens a fresh
   ellipse; a hatch is an svg pattern, over its fill color where
   `draw:fill-hatch-solid` asks for it. Transparency gradients
   (`draw:opacity-name`) are still not read.
-- `GraphicStyle` carries the new `fill_gradient` (`GradientFill`) and
-  `fill_hatch` (`HatchFill`).
+- An odf shape with `draw:shadow="visible"` casts its shadow, offset, colored,
+  translucent and blurred as the style states. It cast none.
+- `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
+  `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
 
 ### Fixes
 

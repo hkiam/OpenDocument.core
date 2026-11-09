@@ -193,3 +193,30 @@ TEST(OdfFill, a_gradient_that_names_nothing_paints_nothing) {
   ASSERT_TRUE(style.fill_color.has_value());
   EXPECT_EQ(style.fill_color->alpha, 0);
 }
+
+TEST(OdfFill, a_visible_shadow_is_read_with_its_offsets_and_opacity) {
+  const std::string path = write_odg(
+      "odf_fill_shadow.odg",
+      R"(<style:style style:name="base" style:family="graphic">)"
+      R"(<style:graphic-properties draw:shadow-offset-x="0cm" )"
+      R"(draw:shadow-offset-y="-0.07cm" draw:shadow-color="#f49100" )"
+      R"(draw:shadow-opacity="50%"/></style:style>)"
+      R"(<style:style style:name="shadow" style:family="graphic" )"
+      R"(style:parent-style-name="base">)"
+      R"(<style:graphic-properties draw:shadow="visible"/></style:style>)"
+      R"(<style:style style:name="hidden" style:family="graphic" )"
+      R"(style:parent-style-name="shadow">)"
+      R"(<style:graphic-properties draw:shadow="hidden"/></style:style>)",
+      rect("shadow") + rect("hidden"));
+
+  const Document document = odr::open(path).as_document_file().document();
+  const std::vector<GraphicStyle> styles = styles_of(document);
+
+  ASSERT_TRUE(styles.at(0).shadow.has_value());
+  const Shadow &shadow = *styles.at(0).shadow;
+  EXPECT_EQ(shadow.offset_x.to_string(), "0cm");
+  EXPECT_EQ(shadow.offset_y.to_string(), "-0.07cm");
+  EXPECT_EQ(shadow.color.rgb(), 0xf49100u);
+  EXPECT_EQ(shadow.color.alpha, 128);
+  EXPECT_FALSE(styles.at(1).shadow.has_value());
+}
