@@ -614,6 +614,20 @@ std::string html::translate_drawing_style(const GraphicStyle &graphic_style) {
       fill_color.has_value()) {
     result.append("fill:").append(color(*fill_color)).append(";");
   }
+  if (const std::optional<Shadow> shadow = graphic_style.shadow;
+      shadow.has_value()) {
+    // a drop shadow follows what the box draws, the shape and its text, as
+    // LibreOffice's does; a box shadow would follow the box
+    result.append("filter:drop-shadow(")
+        .append(css_length(shadow->offset_x))
+        .append(" ")
+        .append(css_length(shadow->offset_y))
+        .append(" ")
+        .append(css_length(shadow->blur))
+        .append(" ")
+        .append(color(shadow->color))
+        .append(");");
+  }
   if (const std::optional<VerticalAlign> vertical_align =
           graphic_style.vertical_align;
       vertical_align.has_value()) {

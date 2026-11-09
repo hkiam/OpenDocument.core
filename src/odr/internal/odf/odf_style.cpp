@@ -739,6 +739,30 @@ void Style::resolve_graphic_style_(const StyleRegistry *registry,
         Color(fill_color->red, fill_color->green, fill_color->blue,
               result.fill_color.has_value() ? result.fill_color->alpha : 0);
   }
+  // `draw:shadow` and its offsets and color cascade independently as well
+  if (registry != nullptr && graphic_properties) {
+    result.shadow.reset();
+    if (std::strcmp(registry->graphic_attribute(node, "draw:shadow").value(),
+                    "visible") == 0) {
+      const auto measure = [&](const char *name, const char *fallback) {
+        return read_measure(registry->graphic_attribute(node, name))
+            .value_or(Measure(fallback));
+      };
+      Shadow shadow;
+      shadow.offset_x = measure("draw:shadow-offset-x", "0.2cm");
+      shadow.offset_y = measure("draw:shadow-offset-y", "0.2cm");
+      shadow.blur = measure("loext:shadow-blur", "0cm");
+      shadow.color =
+          read_color(registry->graphic_attribute(node, "draw:shadow-color"))
+              .value_or(Color(128, 128, 128));
+      shadow.color.alpha = static_cast<std::uint8_t>(std::lround(
+          255 * std::clamp(read_fraction(registry->graphic_attribute(
+                                             node, "draw:shadow-opacity"),
+                                         1.0),
+                           0.0, 1.0)));
+      result.shadow = shadow;
+    }
+  }
   // The kind and the named gradient or hatch cascade independently too, so
   // both are read through the style's bases.
   if (registry != nullptr && graphic_properties) {

@@ -276,6 +276,16 @@ struct HatchFill final {
   double rotation{0};
 };
 
+/// The shadow a shape casts ([OpenDocument] 20.115 `draw:shadow`).
+struct Shadow final {
+  Measure offset_x{0, DynamicUnit()};
+  Measure offset_y{0, DynamicUnit()};
+  /// The color, with `draw:shadow-opacity` in its alpha.
+  Color color;
+  /// The blur radius (`loext:shadow-blur`); zero is a sharp edge.
+  Measure blur{0, DynamicUnit()};
+};
+
 /// Represents a style for graphics.
 struct GraphicStyle final {
   std::optional<Measure> stroke_width;
@@ -286,6 +296,8 @@ struct GraphicStyle final {
   std::optional<GradientFill> fill_gradient;
   /// Set where `draw:fill` is `hatch`.
   std::optional<HatchFill> fill_hatch;
+  /// Set where `draw:shadow` is `visible`.
+  std::optional<Shadow> shadow;
   std::optional<VerticalAlign> vertical_align;
   std::optional<TextWrap> text_wrap;
   /// The side a frame sits on; unset where its offset decides instead.
