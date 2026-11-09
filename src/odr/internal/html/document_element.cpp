@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace odr::internal {
 
@@ -520,6 +521,41 @@ void html::translate_image(const Element &element, const WritingState &state) {
 namespace html {
 namespace {
 
+/// A gradient or hatch the svg of a shape cannot carry: a layer under it,
+/// masked to the shape where @p view_box and @p svg_shape name one. The svg
+/// then strokes only (`fill:none`, see `shape_style`).
+void translate_fill_layer(const GraphicStyle &style,
+                          const std::string_view view_box,
+                          const std::string_view svg_shape,
+                          const WritingState &state) {
+  const std::string image = translate_fill_image(style);
+  if (image.empty()) {
+    return;
+  }
+  std::string paint = "z-index:-1;width:inherit;height:inherit;position:"
+                      "absolute;top:0;left:0;padding:inherit;background-"
+                      "origin:content-box;background-clip:content-box;";
+  if (style.fill_color.has_value() && style.fill_color->alpha != 0) {
+    paint += "background-color:" + color(*style.fill_color) + ";";
+  }
+  paint += image;
+  if (!svg_shape.empty()) {
+    paint += translate_fill_mask(view_box, svg_shape);
+  }
+  state.out().write_new_line();
+  state.out().write_element_begin("div", HtmlElementOptions().set_style(paint));
+  state.out().write_element_end("div");
+}
+
+/// The drawing style of a shape; with a layer under it the svg only strokes.
+std::string shape_style(const GraphicStyle &style) {
+  std::string result = translate_drawing_style(style);
+  if (style.fill_gradient.has_value() || style.fill_hatch.has_value()) {
+    result += "fill:none;";
+  }
+  return result;
+}
+
 void translate_plain_frame(const Frame &frame, const GraphicStyle &style,
                            const WritingState &state) {
   // A plain frame is a box, so its fill has to be a background - the `fill`
@@ -528,6 +564,7 @@ void translate_plain_frame(const Frame &frame, const GraphicStyle &style,
   if (style.fill_color.has_value() && style.fill_color->alpha != 0) {
     background = "background-color:" + color(*style.fill_color) + ";";
   }
+  background += translate_fill_image(style);
   state.out().write_element_begin(
       "div", HtmlElementOptions()
                  .set_attributes(frame_attributes(frame, state))
@@ -540,11 +577,12 @@ void translate_plain_frame(const Frame &frame, const GraphicStyle &style,
 void translate_rect(const Frame &frame, const GraphicStyle &style,
                     const WritingState &state) {
   state.out().write_element_begin(
-      "div", HtmlElementOptions()
-                 .set_attributes(frame_attributes(frame, state))
-                 .set_style(translate_shape_properties(frame) +
-                            translate_drawing_style(style)));
+      "div",
+      HtmlElementOptions()
+          .set_attributes(frame_attributes(frame, state))
+          .set_style(translate_shape_properties(frame) + shape_style(style)));
   translate_children(frame.children(), state);
+  translate_fill_layer(style, {}, {}, state);
   state.out().write_new_line();
   state.out().write_raw(
       R"(<svg xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" preserveAspectRatio="none" style="z-index:-1;width:inherit;height:inherit;position:absolute;top:0;left:0;padding:inherit;"><rect x="0" y="0" width="100%" height="100%" /></svg>)");
@@ -554,12 +592,14 @@ void translate_rect(const Frame &frame, const GraphicStyle &style,
 void translate_ellipse(const Frame &frame, const GraphicStyle &style,
                        const WritingState &state) {
   state.out().write_element_begin(
-      "div", HtmlElementOptions()
-                 .set_attributes(frame_attributes(frame, state))
-                 .set_style(translate_shape_properties(frame) +
-                            translate_drawing_style(style)));
+      "div",
+      HtmlElementOptions()
+          .set_attributes(frame_attributes(frame, state))
+          .set_style(translate_shape_properties(frame) + shape_style(style)));
   state.out().write_new_line();
   translate_children(frame.children(), state);
+  translate_fill_layer(style, "0 0 2 2",
+                       R"(<ellipse cx="1" cy="1" rx="1" ry="1"/>)", state);
   state.out().write_raw(
       R"(<svg xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" preserveAspectRatio="none" style="z-index:-1;width:inherit;height:inherit;position:absolute;top:0;left:0;padding:inherit;"><ellipse cx="50%" cy="50%" rx="50%" ry="50%" /></svg>)");
   state.out().write_element_end("div");
@@ -611,16 +651,22 @@ void translate_line(const Frame &frame, const GraphicStyle &style,
 void translate_custom_shape(const Frame &frame, const GraphicStyle &style,
                             const WritingState &state) {
   state.out().write_element_begin(
-      "div", HtmlElementOptions()
-                 .set_attributes(frame_attributes(frame, state))
-                 .set_style(translate_shape_properties(frame) +
-                            translate_drawing_style(style)));
+      "div",
+      HtmlElementOptions()
+          .set_attributes(frame_attributes(frame, state))
+          .set_style(translate_shape_properties(frame) + shape_style(style)));
   translate_children(frame.children(), state);
 
   if (const std::optional<DrawingPath> path = frame.path(); path.has_value()) {
     const auto number = [](const double value) {
       return util::number::to_string_significant(value, 7);
     };
+    translate_fill_layer(style,
+                         number(path->x) + " " + number(path->y) + " " +
+                             number(path->width) + " " + number(path->height),
+                         "<path fill-rule=\"evenodd\" d=\"" +
+                             xml::escape_attribute(path->data) + "\"/>",
+                         state);
     state.out().write_new_line();
     state.out().write_element_begin(
         "svg",

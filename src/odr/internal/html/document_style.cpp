@@ -9,6 +9,10 @@
 #include <odr/internal/xml/xml_util.hpp>
 
 #include <array>
+#include <cctype>
+#include <cmath>
+#include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 
@@ -617,6 +621,123 @@ std::string html::translate_drawing_style(const GraphicStyle &graphic_style) {
       result += "display:flex;justify-content:center;flex-direction:column;";
     }
     // TODO else log
+  }
+  return result;
+}
+
+namespace {
+
+std::string css_number(const double value) {
+  return util::number::to_string_significant(value, 7);
+}
+
+std::string css_percent(const double fraction) {
+  return css_number(fraction * 100) + "%";
+}
+
+/// [OpenDocument] turns counterclockwise from top-to-bottom, css clockwise
+/// from bottom-to-top.
+std::string css_gradient_angle(const double angle) {
+  return css_number(std::fmod(std::fmod(180 - angle, 360) + 360, 360)) + "deg";
+}
+
+std::string translate_gradient(const GradientFill &gradient) {
+  const std::string start = html::color(gradient.start_color);
+  const std::string end = html::color(gradient.end_color);
+  const double border = gradient.border;
+  switch (gradient.style) {
+  case GradientStyle::linear:
+    return "linear-gradient(" + css_gradient_angle(gradient.angle) + "," +
+           start + " " + css_percent(border) + "," + end + " 100%)";
+  case GradientStyle::axial:
+    return "linear-gradient(" + css_gradient_angle(gradient.angle) + "," +
+           start + " " + css_percent(border / 2) + "," + end + " 50%," + start +
+           " " + css_percent(1 - border / 2) + ")";
+  case GradientStyle::radial:
+  case GradientStyle::ellipsoid:
+  case GradientStyle::square:
+  case GradientStyle::rectangular:
+    // Css has no square or rectangular gradient; the ellipse comes closest.
+    // The start color is the outer one.
+    // LibreOffice reaches half the diagonal of the box; for a box that is
+    // not square the circle comes out elliptic here.
+    return "radial-gradient(70.711% 70.711% at " +
+           css_percent(gradient.center_x) + " " +
+           css_percent(gradient.center_y) + "," + end + " 0%," + start + " " +
+           css_percent(1 - border) + ")";
+  }
+  return {};
+}
+
+/// @p svg as a percent-encoded data url, so nothing in it can end the url or
+/// the attribute it sits in.
+std::string svg_data_url(const std::string_view svg) {
+  std::string result = "url('data:image/svg+xml,";
+  for (const char c : svg) {
+    if (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == ' ' ||
+        c == '.' || c == '-' || c == '/' || c == ':' || c == '=') {
+      result += c;
+    } else {
+      result += fmt::format("%{:02X}", static_cast<unsigned char>(c));
+    }
+  }
+  return result + "')";
+}
+
+/// An svg pattern rather than a css stripe: a stripe a fraction of a pixel
+/// wide lands unevenly and the lines flicker.
+std::string translate_hatch(const HatchFill &hatch) {
+  const std::string distance = html::css_length(hatch.distance);
+  const std::string stroke = html::color(hatch.color);
+  std::string patterns;
+  std::string layers;
+  std::size_t count = 0;
+  const auto layer = [&](const double angle) {
+    const std::string id = "h" + std::to_string(count++);
+    patterns += fmt::format(
+        R"svg(<pattern id="{}" patternUnits="userSpaceOnUse" width="{}" height="{}" patternTransform="rotate({})"><line x1="0" y1="0.5" x2="100000" y2="0.5" stroke="{}" stroke-width="1"/></pattern>)svg",
+        id, distance, distance, css_number(-angle), stroke);
+    layers += fmt::format(
+        R"svg(<rect width="100%" height="100%" fill="url(#{})"/>)svg", id);
+  };
+  layer(hatch.rotation);
+  if (hatch.style != HatchStyle::single) {
+    layer(hatch.rotation + 90);
+  }
+  if (hatch.style == HatchStyle::triple) {
+    layer(hatch.rotation + 45);
+  }
+  return svg_data_url(
+      R"(<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs>)" +
+      patterns + "</defs>" + layers + "</svg>");
+}
+
+} // namespace
+
+std::string html::translate_fill_image(const GraphicStyle &graphic_style) {
+  if (graphic_style.fill_gradient.has_value()) {
+    return "background-image:" +
+           translate_gradient(*graphic_style.fill_gradient) + ";";
+  }
+  if (graphic_style.fill_hatch.has_value()) {
+    return "background-image:" + translate_hatch(*graphic_style.fill_hatch) +
+           ";";
+  }
+  return {};
+}
+
+std::string html::translate_fill_mask(const std::string_view view_box,
+                                      const std::string_view svg_shape) {
+  const std::string svg =
+      R"(<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox=")" +
+      std::string(view_box) + "\">" + std::string(svg_shape) + "</svg>";
+  const std::string url = svg_data_url(svg);
+  std::string result;
+  for (const std::string_view prefix : {"-webkit-", ""}) {
+    result.append(prefix).append("mask-image:").append(url).append(";");
+    result.append(prefix).append("mask-size:100% 100%;");
+    result.append(prefix).append("mask-repeat:no-repeat;");
+    result.append(prefix).append("mask-origin:content-box;");
   }
   return result;
 }

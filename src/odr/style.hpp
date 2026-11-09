@@ -232,11 +232,60 @@ struct TableCellStyle final {
   void override(const TableCellStyle &other);
 };
 
+/// Collection of gradient shapes ([OpenDocument] 19.226.3 `draw:style`).
+enum class GradientStyle {
+  linear,
+  axial,
+  radial,
+  ellipsoid,
+  square,
+  rectangular,
+};
+
+/// A gradient fill ([OpenDocument] 16.40.4 `draw:gradient`).
+struct GradientFill final {
+  GradientStyle style{GradientStyle::linear};
+  /// The colors with `draw:start-intensity` and `draw:end-intensity` applied.
+  Color start_color;
+  Color end_color;
+  /// Degrees, counterclockwise. At 0 a linear gradient runs from the start
+  /// color at the top to the end color at the bottom.
+  double angle{0};
+  /// The fraction of the gradient painted in the start color only.
+  double border{0};
+  /// The centre of a radial, ellipsoid, square or rectangular gradient, as
+  /// fractions of the shape's width and height.
+  double center_x{0.5};
+  double center_y{0.5};
+};
+
+/// Collection of hatch patterns ([OpenDocument] 19.226.4 `draw:style`).
+enum class HatchStyle {
+  single,  ///< parallel lines
+  crossed, ///< the lines and their perpendicular (`double`)
+  triple,  ///< crossed, plus the diagonal between them
+};
+
+/// A hatch fill ([OpenDocument] 16.40.6 `draw:hatch`).
+struct HatchFill final {
+  HatchStyle style{HatchStyle::single};
+  Color color;
+  /// The distance between two lines.
+  Measure distance{0, DynamicUnit()};
+  /// Degrees, counterclockwise. At 0 the lines run horizontally.
+  double rotation{0};
+};
+
 /// Represents a style for graphics.
 struct GraphicStyle final {
   std::optional<Measure> stroke_width;
   std::optional<Color> stroke_color;
+  /// The solid fill; behind @ref fill_hatch where the hatch is solid.
   std::optional<Color> fill_color;
+  /// Set where `draw:fill` is `gradient`; paints over @ref fill_color.
+  std::optional<GradientFill> fill_gradient;
+  /// Set where `draw:fill` is `hatch`.
+  std::optional<HatchFill> fill_hatch;
   std::optional<VerticalAlign> vertical_align;
   std::optional<TextWrap> text_wrap;
   /// The side a frame sits on; unset where its offset decides instead.
