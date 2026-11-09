@@ -136,6 +136,10 @@ The release run heads these entries with the version and opens a fresh
   bullet's font now tells the fonts apart, so Symbol's dot is a dot on every
   level. Any other private-use bullet, such as one of OpenSymbol, takes the
   level's default.
+- A text style that names its family in `fo:font-family`, as PowerPoint's odp
+  and many odg and ods do, is set in that family rather than the browser's
+  default serif. `style:font-name` still outranks it, and PowerPoint's
+  unresolved theme fonts such as `+mn-lt` are no family.
 
 ## v7.7.0 - 2026-10-31
 
