@@ -290,7 +290,10 @@ struct Shadow final {
 struct GraphicStyle final {
   std::optional<Measure> stroke_width;
   std::optional<Color> stroke_color;
-  /// The solid fill; behind @ref fill_hatch where the hatch is solid.
+  /// The solid fill; behind @ref fill_hatch where the hatch is solid. Its
+  /// alpha states whether there is one, 0 or 255, not an opacity: the colour
+  /// a style names is kept where its fill is off. @ref Shadow::color carries
+  /// an opacity.
   std::optional<Color> fill_color;
   std::optional<VerticalAlign> vertical_align;
   std::optional<TextWrap> text_wrap;
@@ -303,6 +306,10 @@ struct GraphicStyle final {
   /// Set where `draw:shadow` is `visible`.
   std::optional<Shadow> shadow;
 
+  /// Takes each field @p other sets. One it leaves unset is kept, so it
+  /// cannot clear an inherited gradient, hatch or shadow; a style that turns
+  /// them off states `draw:fill` and `draw:shadow`, which the reader resolves
+  /// before.
   void override(const GraphicStyle &other);
 };
 

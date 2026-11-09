@@ -9,7 +9,6 @@
 #include <odr/internal/xml/xml_util.hpp>
 
 #include <array>
-#include <cctype>
 #include <cmath>
 #include <string>
 #include <string_view>
@@ -707,9 +706,11 @@ std::string svg_data_url(const std::string_view svg) {
 /// by -45°.
 std::string translate_hatch(const HatchFill &hatch) {
   // a tile narrower than the line would be all line, and costly to draw
+  // a distance that is no absolute length, or less than the minimum, takes
+  // the minimum: lines closer than that blur into a fill
   constexpr double minimum_pixels = 2;
   const std::optional<double> pixels = html::css_pixels(hatch.distance);
-  const std::string distance = pixels.has_value() && *pixels < minimum_pixels
+  const std::string distance = !pixels.has_value() || *pixels < minimum_pixels
                                    ? css_number(minimum_pixels) + "px"
                                    : html::css_length(hatch.distance);
   const std::string stroke = html::color(hatch.color);

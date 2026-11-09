@@ -88,11 +88,11 @@ void Document::init_(const pugi::xml_node content_root,
     meta_xml = xml::parse(*m_files, AbsPath("/meta.xml"));
     meta = meta_xml.document_element().child("office:meta");
   }
-  m_style_registry =
-      StyleRegistry(*this, content_root, styles_root,
-                    gradient_angles_in_tenths(
-                        content_root.attribute("office:version").value(),
-                        meta.child("meta:generator").text().get()));
+  m_generator = meta.child("meta:generator").text().get();
+  m_style_registry = StyleRegistry(
+      *this, content_root, styles_root,
+      gradient_angles_in_tenths(
+          content_root.attribute("office:version").value(), m_generator));
 
   resolve_list_numbering(m_element_registry, m_style_registry, m_root_element);
 
@@ -270,16 +270,21 @@ void remove_value_attributes(pugi::xml_node node) {
   }
 }
 
-/// Whether the producer wrote a unitless gradient `draw:angle` in tenths of a
-/// degree, as LibreOffice reads it (`xmloff/source/style/GradientStyle.cxx`):
-/// below ODF 1.2, from OpenOffice.org, StarOffice and Apache OpenOffice, and
-/// from LibreOffice before 7. Anyone else meant degrees ([OpenDocument]
-/// 18.3.1).
+/// Whether a gradient angle without a unit counts tenths of a degree, as
+/// LibreOffice reads it (`xmloff/source/style/GradientStyle.cxx`); else it
+/// counts degrees ([OpenDocument] 18.3.1). Always below ODF 1.2,
+/// which a missing `office:version` is; at exactly 1.2 where OpenOffice.org,
+/// StarOffice, Apache OpenOffice or a LibreOffice before 7 wrote it; else
+/// degrees. LibreOffice and its derivatives, Collabora Office among them,
+/// name `LibreOffice_project/` in the generator after their version.
 bool gradient_angles_in_tenths(const std::string_view office_version,
                                const std::string_view generator) {
-  if (const std::optional<double> version = util::number::parse(office_version);
-      version.has_value() && *version < 1.2) {
+  const std::optional<double> version = util::number::parse(office_version);
+  if (!version.has_value() || *version < 1.2) {
     return true;
+  }
+  if (*version > 1.2) {
+    return false;
   }
   for (const std::string_view name :
        {"OpenOffice.org", "StarOffice", "Apache_OpenOffice", "OpenOffice/"}) {
@@ -287,16 +292,15 @@ bool gradient_angles_in_tenths(const std::string_view office_version,
       return true;
     }
   }
-  for (const std::string_view name : {"LibreOffice/", "LibreOfficeDev/"}) {
-    if (generator.starts_with(name)) {
-      std::uint32_t major = 0;
-      const std::string_view rest = generator.substr(name.size());
-      return std::from_chars(rest.data(), rest.data() + rest.size(), major)
-                     .ec == std::errc{} &&
-             major < 7;
-    }
+  if (generator.find("LibreOffice_project/") == std::string_view::npos) {
+    return false;
   }
-  return false;
+  const std::size_t slash = generator.find('/');
+  std::uint32_t major = 0;
+  return std::from_chars(generator.data() + slash + 1,
+                         generator.data() + generator.size(), major)
+                 .ec == std::errc{} &&
+         major < 7;
 }
 
 /// Boolean `&` uses words from LibreOffice 27.2 (commit 5663da9fa7).
@@ -578,6 +582,9 @@ using AdapterBase = internal::RegistryElementAdapter<
     abstract::ListItemAdapter, abstract::TableAdapter,
     abstract::TableColumnAdapter, abstract::TableRowAdapter,
     abstract::TableCellAdapter, abstract::FrameAdapter, abstract::ImageAdapter>;
+
+/// LibreOffice's fill of a shape that states no colour.
+Color default_shape_fill_color() { return {0x72, 0x9f, 0xcf}; }
 
 class ElementAdapter final : public AdapterBase {
 public:
@@ -2229,13 +2236,16 @@ public:
   frame_style(const ElementIdentifier element_id) const override {
     GraphicStyle result = get_intermediate_style(element_id).graphic_style;
     // A shape whose styles state no `draw:fill` is filled: producers write it
-    // only where it differs from solid (AOO i112205). A frame is a box, and
+    // only where it differs from solid (AOO i112205), in LibreOffice's
+    // default colour where they state none either. A frame is a box, and
     // fills nothing unless told to.
     if (frame_shape_type(element_id) != ShapeType::none &&
-        result.fill_color.has_value() && result.fill_color->alpha == 0 &&
+        (!result.fill_color.has_value() || result.fill_color->alpha == 0) &&
         !result.fill_gradient.has_value() && !result.fill_hatch.has_value() &&
         !m_document->style_registry().graphic_attribute(
             style_name_or_empty(element_id), "draw:fill")) {
+      result.fill_color =
+          result.fill_color.value_or(default_shape_fill_color());
       result.fill_color->alpha = 255;
     }
     // A shadow belongs to the shape that states it; one stated on a frame
@@ -2969,16 +2979,8 @@ formula::Settings Document::formula_settings() const {
       days.has_value()) {
     result.null_date = static_cast<std::int64_t>(*days);
   }
-  // [ODF 1.2] 4.3.2.1 `meta:generator`, the application that computed the
-  // cached results
-  pugi::xml_document meta_xml;
-  pugi::xml_node meta = m_content_xml.document_element().child("office:meta");
-  if (!meta && m_files != nullptr && m_files->is_file(AbsPath("/meta.xml"))) {
-    meta_xml = xml::parse(*m_files, AbsPath("/meta.xml"));
-    meta = meta_xml.document_element().child("office:meta");
-  }
-  result.boolean_word =
-      boolean_word_of(meta.child("meta:generator").text().get());
+  // the application that computed the cached results
+  result.boolean_word = boolean_word_of(m_generator);
   // [ODF 1.2] 19.636 `table:iteration`
   if (const pugi::xml_node iteration = settings.child("table:iteration");
       std::string_view(iteration.attribute("table:status").value()) ==

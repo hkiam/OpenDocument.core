@@ -252,9 +252,11 @@ TEST(html_document_style, fill_image_draws_a_crossed_hatch_as_two_patterns) {
                                .distance = Measure("0.1cm"),
                                .rotation = 45};
   const std::string image = ihtml::translate_fill_image(style);
-  EXPECT_TRUE(image.starts_with("background-image:url('data:image/svg+xml,"));
-  // percent-encoded: nothing in it ends the url or the attribute
-  EXPECT_EQ(image.find_first_of("\"<>#'", 46), image.size() - 3);
+  const std::string_view prefix = "background-image:url('data:image/svg+xml,";
+  EXPECT_TRUE(image.starts_with(prefix));
+  // percent-encoded: nothing in it ends the url or the attribute, up to the
+  // closing `');`
+  EXPECT_EQ(image.find_first_of("\"<>#'", prefix.size()), image.size() - 3);
   EXPECT_NE(image.find("rotate%28-45%29"), std::string::npos);
   EXPECT_NE(image.find("rotate%28-135%29"), std::string::npos);
   EXPECT_EQ(image.find("rotate%28-90%29"), std::string::npos);
@@ -269,7 +271,7 @@ TEST(html_document_style, fill_mask_scales_the_shape_to_the_box) {
   EXPECT_NE(mask.find("mask-size:100% 100%;"), std::string::npos);
 }
 
-TEST(html_document_style, drawing_style_casts_a_shadow_as_a_drop_shadow) {
+TEST(html_document_style, a_shadow_is_its_own_property_not_the_drawing_style) {
   GraphicStyle style;
   style.shadow = Shadow{.offset_x = Measure("0.2cm"),
                         .offset_y = Measure("0.1cm"),

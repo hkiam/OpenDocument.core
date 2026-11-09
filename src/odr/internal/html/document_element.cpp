@@ -540,7 +540,6 @@ void translate_fill_layer(const Frame &frame, const GraphicStyle &style,
     paint += "background-color:" + color(*style.fill_color) + ";";
   }
   paint += image;
-  paint += translate_shadow(style, false);
   if (!svg_shape.empty()) {
     paint += translate_fill_mask(view_box, svg_shape);
   }
@@ -551,10 +550,39 @@ void translate_fill_layer(const Frame &frame, const GraphicStyle &style,
   state.out().write_element_end("div");
 }
 
+/// Whether a shape paints a fill layer under its svg.
+bool has_fill_layer(const GraphicStyle &style) {
+  return style.fill_gradient.has_value() || style.fill_hatch.has_value();
+}
+
+/// Opens the box that casts a shape's shadow where a fill layer lies under
+/// its svg: the shape casts one shadow, not one per layer, and the mask that
+/// fits the layer to the shape does not clip it. Returns the shadow the svg
+/// casts itself where there is no layer.
+std::string begin_shape_shadow(const GraphicStyle &style,
+                               const WritingState &state) {
+  if (!has_fill_layer(style)) {
+    return translate_shadow(style, false);
+  }
+  state.out().write_new_line();
+  state.out().write_element_begin(
+      "div", HtmlElementOptions().set_style(
+                 "z-index:-1;width:inherit;height:inherit;position:absolute;"
+                 "top:0;left:0;padding:inherit;" +
+                 translate_shadow(style, false)));
+  return {};
+}
+
+void end_shape_shadow(const GraphicStyle &style, const WritingState &state) {
+  if (has_fill_layer(style)) {
+    state.out().write_element_end("div");
+  }
+}
+
 /// The drawing style of a shape; with a layer under it the svg only strokes.
 std::string shape_style(const GraphicStyle &style) {
   std::string result = translate_drawing_style(style);
-  if (style.fill_gradient.has_value() || style.fill_hatch.has_value()) {
+  if (has_fill_layer(style)) {
     result += "fill:none;";
   }
   return result;
@@ -592,12 +620,14 @@ void translate_rect(const Frame &frame, const GraphicStyle &style,
           .set_attributes(frame_attributes(frame, state))
           .set_style(translate_shape_properties(frame) + shape_style(style)));
   translate_children(frame.children(), state);
+  const std::string svg_shadow = begin_shape_shadow(style, state);
   translate_fill_layer(frame, style, {}, {}, state);
   state.out().write_new_line();
   state.out().write_raw(
       R"(<svg xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" preserveAspectRatio="none" style="z-index:-1;width:inherit;height:inherit;position:absolute;top:0;left:0;padding:inherit;)" +
-      translate_shadow(style, false) +
+      svg_shadow +
       R"("><rect x="0" y="0" width="100%" height="100%" /></svg>)");
+  end_shape_shadow(style, state);
   state.out().write_element_end("div");
 }
 
@@ -610,12 +640,14 @@ void translate_ellipse(const Frame &frame, const GraphicStyle &style,
           .set_style(translate_shape_properties(frame) + shape_style(style)));
   state.out().write_new_line();
   translate_children(frame.children(), state);
+  const std::string svg_shadow = begin_shape_shadow(style, state);
   translate_fill_layer(frame, style, "0 0 2 2",
                        R"(<ellipse cx="1" cy="1" rx="1" ry="1"/>)", state);
   state.out().write_raw(
       R"(<svg xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" preserveAspectRatio="none" style="z-index:-1;width:inherit;height:inherit;position:absolute;top:0;left:0;padding:inherit;)" +
-      translate_shadow(style, false) +
+      svg_shadow +
       R"("><ellipse cx="50%" cy="50%" rx="50%" ry="50%" /></svg>)");
+  end_shape_shadow(style, state);
   state.out().write_element_end("div");
 }
 
@@ -679,6 +711,7 @@ void translate_custom_shape(const Frame &frame, const GraphicStyle &style,
     // An outline that never closes is a line, which svg would else fill as if
     // it did ([OpenDocument] 20.118); no layer fills it either.
     const bool open = path->data.find_first_of("Zz") == std::string::npos;
+    const std::string svg_shadow = begin_shape_shadow(style, state);
     if (!open) {
       translate_fill_layer(frame, style,
                            number(path->x) + " " + number(path->y) + " " +
@@ -701,7 +734,7 @@ void translate_custom_shape(const Frame &frame, const GraphicStyle &style,
                                 number(path->height)}})
             .set_style("z-index:-1;width:inherit;height:inherit;position:"
                        "absolute;top:0;left:0;padding:inherit;" +
-                       translate_shadow(style, false)));
+                       svg_shadow));
     HtmlAttributesVector attributes{
         {"d", path->data},
         // A ring is two subpaths, and only even-odd leaves its hole.
@@ -716,6 +749,7 @@ void translate_custom_shape(const Frame &frame, const GraphicStyle &style,
                                         .set_close_type(HtmlCloseType::trailing)
                                         .set_attributes(std::move(attributes)));
     state.out().write_element_end("svg");
+    end_shape_shadow(style, state);
   }
 
   state.out().write_element_end("div");

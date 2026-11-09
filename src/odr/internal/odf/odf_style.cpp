@@ -399,19 +399,21 @@ std::optional<GradientFill> read_gradient(const pugi::xml_node node,
       it != std::end(styles)) {
     result.style = it->second;
   }
+  // what is not stated is zero, as LibreOffice's `XMLGradientStyleImport`
+  // starts from: black, and the centre in the corner
   result.start_color = read_intensity(
       read_color(node.attribute("draw:start-color")).value_or(Color(0, 0, 0)),
       node.attribute("draw:start-intensity"));
-  result.end_color = read_intensity(read_color(node.attribute("draw:end-color"))
-                                        .value_or(Color(255, 255, 255)),
-                                    node.attribute("draw:end-intensity"));
+  result.end_color = read_intensity(
+      read_color(node.attribute("draw:end-color")).value_or(Color(0, 0, 0)),
+      node.attribute("draw:end-intensity"));
   result.angle = read_angle(node.attribute("draw:angle"), angle_in_tenths);
   result.border =
       std::clamp(read_fraction(node.attribute("draw:border"), 0.0), 0.0, 1.0);
   result.center_x =
-      std::clamp(read_fraction(node.attribute("draw:cx"), 0.5), 0.0, 1.0);
+      std::clamp(read_fraction(node.attribute("draw:cx"), 0.0), 0.0, 1.0);
   result.center_y =
-      std::clamp(read_fraction(node.attribute("draw:cy"), 0.5), 0.0, 1.0);
+      std::clamp(read_fraction(node.attribute("draw:cy"), 0.0), 0.0, 1.0);
   return result;
 }
 
@@ -419,11 +421,13 @@ std::optional<HatchFill> read_hatch(const pugi::xml_node node) {
   if (!node) {
     return {};
   }
-  const std::optional<Measure> distance =
+  // LibreOffice draws a hatch without a positive distance with its lines a
+  // minimum apart, which the renderer sets
+  std::optional<Measure> distance =
       read_measure(node.attribute("draw:distance"));
   if (!distance.has_value() || !(distance->magnitude() > 0) ||
       !std::isfinite(distance->magnitude())) {
-    return {};
+    distance = Measure(0, DynamicUnit("cm"));
   }
   HatchFill result;
   if (const std::string_view style = node.attribute("draw:style").value();

@@ -31,14 +31,18 @@ constexpr const char *namespaces =
     R"(xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0")";
 
 /// A drawing whose `styles.xml` holds @p styles under `office:styles` and
-/// whose page holds @p body; with @p generator, a `meta.xml` naming it.
+/// whose page holds @p body; with @p generator, a `meta.xml` naming it, and
+/// stating ODF @p version, none where it is empty.
 std::string write_odg(const std::string &name, const std::string &styles,
                       const std::string &body,
-                      const std::string &generator = {}) {
+                      const std::string &generator = {},
+                      const std::string &version = "1.3") {
   const std::string content =
       std::string(R"(<?xml version="1.0" encoding="UTF-8"?>)") +
-      "<office:document-content " + namespaces + ">" +
-      R"(<office:body><office:drawing><draw:page>)" + body +
+      "<office:document-content " + namespaces +
+      (version.empty() ? std::string()
+                       : R"( office:version=")" + version + R"(")") +
+      ">" + R"(<office:body><office:drawing><draw:page>)" + body +
       R"(</draw:page></office:drawing></office:body>)"
       R"(</office:document-content>)";
   const std::string styles_xml =
@@ -98,7 +102,8 @@ TEST(OdfFill, a_gradient_is_read_with_its_intensities_and_its_angle) {
       R"(<style:style style:name="g" style:family="graphic">)"
       R"(<style:graphic-properties draw:fill="gradient" )"
       R"(draw:fill-gradient-name="G"/></style:style>)",
-      rect("g"), "LibreOffice/6.4.7.2$Linux_X86_64");
+      rect("g"),
+      "LibreOffice/6.4.7.2$Linux_X86_64 LibreOffice_project/40$Build-2", "1.2");
 
   const Document document = odr::open(path).as_document_file().document();
   const GraphicStyle style = styles_of(document).at(0);
@@ -259,24 +264,97 @@ TEST(OdfFill,
       R"(<style:style style:name="g" style:family="graphic">)"
       R"(<style:graphic-properties draw:fill="gradient" )"
       R"(draw:fill-gradient-name="G"/></style:style>)";
-  const auto angle = [&](const std::string &name,
-                         const std::string &generator) {
+  const auto angle = [&](const std::string &name, const std::string &generator,
+                         const std::string &version) {
     const Document document =
-        odr::open(write_odg(name, styles, rect("g"), generator))
+        odr::open(write_odg(name, styles, rect("g"), generator, version))
             .as_document_file()
             .document();
     return styles_of(document).at(0).fill_gradient->angle;
   };
+  const std::string lo6 =
+      "LibreOffice/6.4.7.2$Linux_X86_64 LibreOffice_project/40$Build-2";
+  const std::string lo7 =
+      "LibreOffice/7.3.7.2$Linux_X86_64 LibreOffice_project/30$Build-2";
 
-  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_unknown.odg", ""), 300);
+  // at ODF 1.2 the producer decides
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_unknown.odg", "", "1.2"), 300);
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_lo7.odg", lo7, "1.2"), 300);
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_lo6.odg", lo6, "1.2"), 30);
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_collabora.odg",
+                         "CollaboraOffice/6.4.10.4$Linux_X86_64 "
+                         "LibreOffice_project/fb2$Build-4",
+                         "1.2"),
+                   30);
   EXPECT_DOUBLE_EQ(
-      angle("odf_fill_angle_lo7.odg", "LibreOffice/7.3.7.2$Linux_X86_64"), 300);
-  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_lo6.odg", "LibreOffice/6.4.7.2"), 30);
-  EXPECT_DOUBLE_EQ(
-      angle("odf_fill_angle_aoo.odg", "Apache_OpenOffice/4.1.15$Win32"), 30);
+      angle("odf_fill_angle_aoo.odg", "Apache_OpenOffice/4.1.15$Win32", "1.2"),
+      30);
+  // below it tenths, as an Excel ods stating no version writes them
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_none.odg", "", ""), 30);
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_1_1.odg", lo7, "1.1"), 30);
+  // above it degrees, whoever wrote it
+  EXPECT_DOUBLE_EQ(angle("odf_fill_angle_1_3.odg", lo6, "1.3"), 300);
 }
 
-TEST(OdfFill, a_shadow_stated_on_a_frame_is_not_cast_again_by_its_content) {
+TEST(OdfFill, a_shape_stating_no_fill_and_no_colour_takes_libreoffices) {
+  const std::string path =
+      write_odg("odf_fill_default_colour.odg",
+                R"(<style:style style:name="g" style:family="graphic">)"
+                R"(<style:graphic-properties svg:stroke-color="#000000"/>)"
+                R"(</style:style>)",
+                rect("g"));
+
+  const Document document = odr::open(path).as_document_file().document();
+  const GraphicStyle style = styles_of(document).at(0);
+
+  ASSERT_TRUE(style.fill_color.has_value());
+  EXPECT_EQ(style.fill_color->rgb(), 0x729fcfu);
+  EXPECT_EQ(style.fill_color->alpha, 255);
+}
+
+TEST(OdfFill, a_gradient_stating_nothing_is_black_with_its_centre_at_zero) {
+  // as LibreOffice's XMLGradientStyleImport starts from
+  const std::string path =
+      write_odg("odf_fill_gradient_bare.odg",
+                R"(<draw:gradient draw:name="G" draw:style="radial"/>)"
+                R"(<style:style style:name="g" style:family="graphic">)"
+                R"(<style:graphic-properties draw:fill="gradient" )"
+                R"(draw:fill-gradient-name="G"/></style:style>)",
+                rect("g"));
+
+  const Document document = odr::open(path).as_document_file().document();
+  const GraphicStyle style = styles_of(document).at(0);
+
+  ASSERT_TRUE(style.fill_gradient.has_value());
+  EXPECT_EQ(style.fill_gradient->start_color.rgb(), 0x000000u);
+  EXPECT_EQ(style.fill_gradient->end_color.rgb(), 0x000000u);
+  EXPECT_DOUBLE_EQ(style.fill_gradient->center_x, 0);
+  EXPECT_DOUBLE_EQ(style.fill_gradient->center_y, 0);
+}
+
+TEST(OdfFill, a_hatch_without_a_distance_is_drawn_at_the_minimum) {
+  const std::string path = write_odg(
+      "odf_fill_hatch_zero.odg",
+      R"(<draw:hatch draw:name="H" draw:style="single" draw:color="#000000")"
+      R"( draw:distance="0cm"/>)"
+      R"(<style:style style:name="g" style:family="graphic">)"
+      R"(<style:graphic-properties draw:fill="hatch" )"
+      R"(draw:fill-hatch-name="H"/></style:style>)",
+      rect("g"));
+
+  const Document document = odr::open(path).as_document_file().document();
+  ASSERT_TRUE(styles_of(document).at(0).fill_hatch.has_value());
+
+  std::ostringstream html;
+  html::translate(odr::open(path), HtmlConfig())
+      .list_views()
+      .at(0)
+      .write_html(html);
+  // the lines 2px apart, percent-encoded in the pattern
+  EXPECT_NE(html.str().find("width=%222px%22"), std::string::npos);
+}
+
+TEST(OdfFill, a_visible_shadow_stating_nothing_else_is_black_and_unshifted) {
   const std::string path = write_odg(
       "odf_fill_shadow_frame.odg",
       R"(<style:style style:name="s" style:family="graphic">)"
@@ -326,7 +404,17 @@ TEST(OdfFill, a_shape_paints_its_gradient_on_a_layer_masked_to_it) {
             std::string::npos);
   // the shape's svg only strokes, and the shadow stays off its box
   EXPECT_NE(page.find("fill:none;"), std::string::npos);
-  EXPECT_NE(page.find("filter:drop-shadow(0.1cm 0cm 0cm #000000)"),
-            std::string::npos);
   EXPECT_EQ(page.find("box-shadow", page.find("<body")), std::string::npos);
+  // each shape casts one shadow, from a box around its layer and its svg,
+  // which the mask on the layer does not clip
+  const std::string shadow = "filter:drop-shadow(0.1cm 0cm 0cm #000000)";
+  std::size_t shadows = 0;
+  for (std::size_t at = page.find(shadow, page.find("<body"));
+       at != std::string::npos; at = page.find(shadow, at + 1)) {
+    ++shadows;
+  }
+  EXPECT_EQ(shadows, 2U);
+  const std::size_t layer_end = page.find('>', layer);
+  EXPECT_EQ(page.substr(layer, layer_end - layer).find("drop-shadow"),
+            std::string::npos);
 }
