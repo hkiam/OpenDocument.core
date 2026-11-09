@@ -53,7 +53,8 @@ std::string format_roman(std::uint32_t number, const bool upper) {
 }
 
 /// The characters of the Symbol font that lists use, by their byte, in
-/// Unicode, after Adobe's `symbol.txt`.
+/// Unicode after Adobe's `symbol.txt`, which leaves the horizontal line
+/// 0xBE in its private use area.
 std::string_view symbol_character(const char32_t byte) {
   switch (byte) {
   case 0x2A:
@@ -87,21 +88,81 @@ std::string_view symbol_character(const char32_t byte) {
 /// Unicode.
 std::string_view wingdings_character(const char32_t byte) {
   switch (byte) {
+  case 0x6C:
+    return "●";
   case 0x6E:
     return "■";
+  case 0x6F:
+    return "□";
+  case 0x71:
+    return "❑";
   case 0x75:
+    return "◆";
+  case 0x76:
     return "❖";
+  case 0x77:
+    return "⬥";
   case 0xA7:
     return "▪";
   case 0xA8:
-    return "◆";
+    return "◻";
   case 0xD8:
     return "➢";
+  case 0xF0:
+    return "⇨";
   case 0xFC:
-    return "✔";
+    return "✓";
+  case 0xFD:
+    return "☒";
+  case 0xFE:
+    return "☑";
   default:
     return {};
   }
+}
+
+/// The characters of the Zapf Dingbats font that lists use, by their byte, in
+/// Unicode, whose Dingbats block follows the font.
+std::string_view zapf_dingbats_character(const char32_t byte) {
+  switch (byte) {
+  case 0x6C:
+    return "●";
+  case 0x6E:
+    return "■";
+  case 0x6F:
+    return "❏";
+  case 0x71:
+    return "❑";
+  case 0x75:
+    return "◆";
+  case 0x76:
+    return "❖";
+  default:
+    return {};
+  }
+}
+
+/// A symbol font's characters by their byte, empty for one it lacks.
+using CharacterTable = std::string_view (*)(char32_t);
+
+/// The table for @p font_family, which comes quoted from `svg:font-family`,
+/// or null for a font that encodes its characters as Unicode.
+CharacterTable symbol_font_table(std::string_view font_family) {
+  font_family = util::string::trim_view(font_family, [](const char c) {
+    return c == '\'' || c == '"' || util::string::is_ascii_whitespace(c);
+  });
+  if (util::string::equals_ignore_case(font_family, "Symbol")) {
+    return symbol_character;
+  }
+  if (util::string::equals_ignore_case(font_family, "Wingdings")) {
+    return wingdings_character;
+  }
+  if (util::string::equals_ignore_case(font_family, "ZapfDingbats") ||
+      util::string::equals_ignore_case(font_family, "Zapf Dingbats") ||
+      util::string::equals_ignore_case(font_family, "ITC Zapf Dingbats")) {
+    return zapf_dingbats_character;
+  }
+  return nullptr;
 }
 
 } // namespace
@@ -130,6 +191,35 @@ std::string internal::format_list_number(const ListNumberFormat format,
   default:
     return "";
   }
+}
+
+std::string internal::resolve_bullet(const std::string &text,
+                                     const std::uint32_t level,
+                                     const std::string_view font_family) {
+  static constexpr std::array<const char *, 3> defaults{"•", "◦", "▪"};
+
+  if (text.empty() || !util::string::is_valid_utf8(text)) {
+    return defaults[level % defaults.size()];
+  }
+
+  std::string_view remaining = text;
+  const char32_t first = util::string::next_utf8(remaining);
+  const CharacterTable table = symbol_font_table(font_family);
+  // a symbol font is read at its byte, whether stated as it or at U+F0xx
+  const char32_t byte = first >= 0xF020 && first <= 0xF0FF ? first - 0xF000
+                        : first >= 0x20 && first <= 0xFF   ? first
+                                                           : 0;
+  if (table != nullptr && byte != 0) {
+    if (const std::string_view character = table(byte); !character.empty()) {
+      return std::string(character);
+    }
+    return defaults[level % defaults.size()];
+  }
+  // a private-use character means nothing outside its font
+  if (first >= 0xE000 && first <= 0xF8FF) {
+    return defaults[level % defaults.size()];
+  }
+  return text;
 }
 
 } // namespace odr
@@ -218,40 +308,6 @@ void ListCounter::grow_(const std::uint32_t level) {
     m_numbers.resize(static_cast<std::size_t>(level) + 1);
     m_formats.resize(level + 1, ListNumberFormat::decimal);
   }
-}
-
-} // namespace odr::internal
-
-namespace odr::internal {
-
-std::string resolve_bullet(const std::string &text, const std::uint32_t level,
-                           const std::string_view font_family) {
-  static constexpr std::array<const char *, 3> defaults{"•", "◦", "▪"};
-
-  if (text.empty() || !util::string::is_valid_utf8(text)) {
-    return defaults[level % defaults.size()];
-  }
-
-  std::string_view remaining = text;
-  const char32_t first = util::string::next_utf8(remaining);
-  if (first < 0xE000 || first > 0xF8FF) {
-    return text;
-  }
-
-  // the families come quoted from `svg:font-family`
-  const std::string_view family =
-      util::string::trim_view(font_family, [](const char c) {
-        return c == '\'' || c == '"' || util::string::is_ascii_whitespace(c);
-      });
-  const std::string_view character =
-      first < 0xF020 || first > 0xF0FF ? std::string_view{}
-      : util::string::equals_ignore_case(family, "Symbol")
-          ? symbol_character(first - 0xF000)
-          : wingdings_character(first - 0xF000);
-  if (character.empty()) {
-    return defaults[level % defaults.size()];
-  }
-  return std::string(character);
 }
 
 } // namespace odr::internal

@@ -159,3 +159,28 @@ TEST(DocumentList, docx_reads_zero_starts_and_ignores_invalid_values) {
   level.child("w:lvlText").attribute("w:val").set_value("\xf0");
   EXPECT_EQ("\xe2\x80\xa2", numbering.level("1", 0).label);
 }
+
+TEST(DocumentList, docx_maps_a_bullet_by_its_font) {
+  namespace docx = odr::internal::ooxml::text;
+  pugi::xml_document document;
+  ASSERT_TRUE(document.load_string(
+      R"(<w:numbering><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">)"
+      R"(<w:numFmt w:val="bullet"/><w:lvlText w:val="&#xF0A7;"/>)"
+      R"(<w:rPr><w:rFonts w:ascii="Symbol"/></w:rPr>)"
+      R"(</w:lvl></w:abstractNum><w:num w:numId="1">)"
+      R"(<w:abstractNumId w:val="1"/></w:num></w:numbering>)"));
+  auto fonts = document.first_child()
+                   .first_child()
+                   .first_child()
+                   .child("w:rPr")
+                   .child("w:rFonts")
+                   .attribute("w:ascii");
+  // the same byte is a club in Symbol and a small square in Wingdings
+  EXPECT_EQ(
+      "\xe2\x99\xa3",
+      docx::NumberingRegistry(document.first_child(), {}).level("1", 0).label);
+  fonts.set_value("Wingdings");
+  EXPECT_EQ(
+      "\xe2\x96\xaa",
+      docx::NumberingRegistry(document.first_child(), {}).level("1", 0).label);
+}

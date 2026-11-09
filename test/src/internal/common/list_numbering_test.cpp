@@ -159,32 +159,63 @@ TEST(ListCounter, a_started_level_counts_on_from_its_start) {
   EXPECT_EQ(counter.advance(0, outer), "5.");
 }
 
+// U+F0B7, U+F0A7 and so on: the private-use points Word writes a symbol
+// font's byte at
+namespace {
+const std::string symbol_dot = "\xef\x82\xb7";   // Symbol 0xB7
+const std::string symbol_minus = "\xef\x80\xad"; // Symbol 0x2D
+const std::string square = "\xef\x82\xa7";       // 0xA7
+const std::string arrow = "\xef\x83\x98";        // Wingdings 0xD8
+const std::string check = "\xef\x83\xbc";        // Wingdings 0xFC
+const std::string diamond = "\xef\x81\xb5";      // Wingdings 0x75
+const std::string clover = "\xef\x81\xb6";       // Wingdings 0x76
+const std::string white_square = "\xef\x82\xa8"; // Wingdings 0xA8
+const std::string unmapped = "\xef\x80\xa1";     // 0x21
+const std::string private_use = "\xee\x80\x80";  // U+E000
+} // namespace
+
 TEST(ResolveBullet, a_symbol_font_bullet_becomes_its_unicode_character) {
-  // Word's bullets: Symbol's dot and Wingdings' square at private-use points
-  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "•");
-  EXPECT_EQ(resolve_bullet("", 1, "'Symbol'"), "•");
-  EXPECT_EQ(resolve_bullet("", 1, "Wingdings"), "▪");
-  EXPECT_EQ(resolve_bullet("", 0, "Wingdings"), "➢");
-  EXPECT_EQ(resolve_bullet("", 0, "Wingdings"), "✔");
-  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "−");
+  EXPECT_EQ(resolve_bullet(symbol_dot, 0, "Symbol"), "•");
+  EXPECT_EQ(resolve_bullet(symbol_dot, 1, "'Symbol'"), "•");
+  EXPECT_EQ(resolve_bullet(symbol_minus, 0, "symbol"), "−");
+  EXPECT_EQ(resolve_bullet(square, 1, "Wingdings"), "▪");
+  EXPECT_EQ(resolve_bullet(arrow, 0, "Wingdings"), "➢");
+  EXPECT_EQ(resolve_bullet(check, 0, "Wingdings"), "✓");
+  EXPECT_EQ(resolve_bullet(diamond, 0, "Wingdings"), "◆");
+  EXPECT_EQ(resolve_bullet(clover, 0, "Wingdings"), "❖");
+  EXPECT_EQ(resolve_bullet(white_square, 0, "Wingdings"), "◻");
 }
 
 TEST(ResolveBullet, the_font_tells_the_same_byte_apart) {
-  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "♣");
-  EXPECT_EQ(resolve_bullet("", 0, "Wingdings"), "▪");
-  // an unknown font is read as Wingdings, as before the font was asked
-  EXPECT_EQ(resolve_bullet("", 0, ""), "▪");
+  EXPECT_EQ(resolve_bullet(square, 0, "Symbol"), "♣");
+  EXPECT_EQ(resolve_bullet(square, 0, "Wingdings"), "▪");
 }
 
-TEST(ResolveBullet, an_unmapped_private_use_bullet_takes_the_level_default) {
-  EXPECT_EQ(resolve_bullet("", 1, "Wingdings"), "◦");
-  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "•");
-  EXPECT_EQ(resolve_bullet("", 2, "Marlett"), "▪");
+TEST(ResolveBullet, a_symbol_font_is_read_at_its_byte_too) {
+  // the bytes as such, which Word writes as often: "v", "§" and "n"
+  EXPECT_EQ(resolve_bullet("v", 0, "Wingdings"), "❖");
+  EXPECT_EQ(resolve_bullet("\xc2\xa7", 0, "Wingdings"), "▪");
+  EXPECT_EQ(resolve_bullet("n", 0, "ZapfDingbats"), "■");
+  EXPECT_EQ(resolve_bullet("-", 0, "Symbol"), "−");
+}
+
+TEST(ResolveBullet, an_unmapped_symbol_takes_the_level_default) {
+  EXPECT_EQ(resolve_bullet(unmapped, 1, "Wingdings"), "◦");
+  EXPECT_EQ(resolve_bullet("x", 2, "Wingdings"), "▪");
+  // Wingdings 2 and 3 have tables of their own, which are not read
+  EXPECT_EQ(resolve_bullet(square, 0, "Wingdings 2"), "•");
+}
+
+TEST(ResolveBullet, a_private_use_bullet_in_another_font_takes_the_default) {
+  EXPECT_EQ(resolve_bullet(private_use, 0, "OpenSymbol"), "•");
+  EXPECT_EQ(resolve_bullet(square, 1, ""), "◦");
+  EXPECT_EQ(resolve_bullet(square, 2, "Marlett"), "▪");
 }
 
 TEST(ResolveBullet, other_text_is_kept) {
-  EXPECT_EQ(resolve_bullet("–", 0, "Symbol"), "–");
+  EXPECT_EQ(resolve_bullet("\xe2\x80\x93", 0, "Symbol"), "\xe2\x80\x93");
   EXPECT_EQ(resolve_bullet("o", 1, "Courier New"), "o");
+  EXPECT_EQ(resolve_bullet("v", 1, ""), "v");
   EXPECT_EQ(resolve_bullet("", 1), "◦");
   EXPECT_EQ(resolve_bullet("\xff", 0), "•");
 }
