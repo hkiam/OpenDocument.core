@@ -313,6 +313,28 @@ PageLayout read_page_layout(const pugi::xml_node node) {
     result.margin.bottom = read_measure(margin_bottom);
   }
 
+  // `svg:height` fixes the height, `fo:min-height` lets it grow; both read as
+  // the least height
+  const auto marginal_height = [](const pugi::xml_node properties) {
+    std::optional<Measure> height =
+        read_measure(properties.attribute("svg:height"));
+    return height.has_value()
+               ? height
+               : read_measure(properties.attribute("fo:min-height"));
+  };
+  if (const pugi::xml_node header =
+          node.child("style:header-style")
+              .child("style:header-footer-properties")) {
+    result.header_min_height = marginal_height(header);
+    result.header_spacing = read_measure(header.attribute("fo:margin-bottom"));
+  }
+  if (const pugi::xml_node footer =
+          node.child("style:footer-style")
+              .child("style:header-footer-properties")) {
+    result.footer_min_height = marginal_height(footer);
+    result.footer_spacing = read_measure(footer.attribute("fo:margin-top"));
+  }
+
   return result;
 }
 
