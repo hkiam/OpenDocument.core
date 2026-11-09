@@ -83,7 +83,20 @@ TEST(OdfPageLayout, a_landscape_layout_stating_no_size_stays_upright) {
       page_layout_of(write_odt("odf_page_layout_no_size_landscape.odt",
                                R"(style:print-orientation="landscape")"));
 
+  ASSERT_TRUE(layout.width.has_value());
+  ASSERT_TRUE(layout.height.has_value());
   EXPECT_EQ(layout.width->to_string(), "21cm");
+  EXPECT_EQ(layout.height->to_string(), "29.7cm");
+}
+
+TEST(OdfPageLayout, a_missing_width_or_height_is_completed_on_its_own) {
+  // as LibreOffice's XMLPageMasterContext completes each
+  const PageLayout layout = page_layout_of(
+      write_odt("odf_page_layout_width_only.odt", R"(fo:page-width="8.5in")"));
+
+  ASSERT_TRUE(layout.width.has_value());
+  ASSERT_TRUE(layout.height.has_value());
+  EXPECT_EQ(layout.width->to_string(), "8.5in");
   EXPECT_EQ(layout.height->to_string(), "29.7cm");
 }
 
@@ -92,6 +105,8 @@ TEST(OdfPageLayout, a_stated_size_is_kept) {
       write_odt("odf_page_layout_letter.odt",
                 R"(fo:page-width="8.5in" fo:page-height="11in")"));
 
+  ASSERT_TRUE(layout.width.has_value());
+  ASSERT_TRUE(layout.height.has_value());
   EXPECT_EQ(layout.width->to_string(), "8.5in");
   EXPECT_EQ(layout.height->to_string(), "11in");
 }
@@ -132,6 +147,8 @@ TEST(OdfPageLayout, a_drawing_page_whose_master_names_no_layout_takes_a4) {
   const PageLayout layout =
       (*document.root_element().children().begin()).as_page().page_layout();
 
+  ASSERT_TRUE(layout.width.has_value());
+  ASSERT_TRUE(layout.height.has_value());
   EXPECT_EQ(layout.width->to_string(), "21cm");
   EXPECT_EQ(layout.height->to_string(), "29.7cm");
 }

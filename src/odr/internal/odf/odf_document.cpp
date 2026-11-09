@@ -538,6 +538,26 @@ using AdapterBase = internal::RegistryElementAdapter<
     abstract::TableColumnAdapter, abstract::TableRowAdapter,
     abstract::TableCellAdapter, abstract::FrameAdapter, abstract::ImageAdapter>;
 
+/// The paper a layout stating no size takes: the application's, which
+/// LibreOffice takes from the locale (Letter in the US). With no locale to
+/// ask, A4 portrait, which LibreOffice keeps for a landscape layout too.
+constexpr double default_paper_width_cm = 21;
+constexpr double default_paper_height_cm = 29.7;
+
+/// @p layout with the default paper's width and height where it states none,
+/// each on its own as LibreOffice's `XMLPageMasterContext` completes them; so
+/// a text page has a width to set its lines in and a drawing page a box to
+/// hold its shapes. A sheet keeps none, and prints to the printer's paper.
+PageLayout with_default_paper(PageLayout layout) {
+  if (!layout.width.has_value()) {
+    layout.width = Measure(default_paper_width_cm, DynamicUnit("cm"));
+  }
+  if (!layout.height.has_value()) {
+    layout.height = Measure(default_paper_height_cm, DynamicUnit("cm"));
+  }
+  return layout;
+}
+
 class ElementAdapter final : public AdapterBase {
 public:
   ElementAdapter(Document &document, ElementRegistry &registry)
@@ -569,18 +589,6 @@ public:
     return {};
   }
 
-  /// A layout stating no size takes the application's paper, which
-  /// LibreOffice takes from the locale (Letter in the US). With no locale to
-  /// ask, A4 portrait, which LibreOffice keeps for a landscape layout too; so
-  /// a text page has a width to set its lines in and a drawing page a box to
-  /// hold its shapes. A sheet keeps none, and prints to the printer's paper.
-  static PageLayout with_default_paper(PageLayout layout) {
-    if (!layout.width.has_value() && !layout.height.has_value()) {
-      layout.width = Measure(21, DynamicUnit("cm"));
-      layout.height = Measure(29.7, DynamicUnit("cm"));
-    }
-    return layout;
-  }
   static bool is_anchored_frame(const pugi::xml_node node) {
     return std::strcmp(node.name(), "draw:frame") == 0;
   }
