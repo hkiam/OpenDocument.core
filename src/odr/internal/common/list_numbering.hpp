@@ -39,12 +39,8 @@ struct ListMarker final {
 
 std::string format_list_number(ListNumberFormat format, std::uint32_t number);
 
-/// A bullet character in Unicode. Word sets its bullets in Symbol or Wingdings
-/// at private-use code points U+F020 to U+F0FF. In any other font they show as
-/// a box. @p font_family is the family the bullet is set in, or empty if it is
-/// unknown. Any font other than Symbol is read as Wingdings. A private-use
-/// character without a mapping, or an empty or malformed @p text, gives a
-/// default for @p level (counted from 0).
+/// The bullet @p text, set in @p font_family (empty if unknown), in Unicode,
+/// or the default for @p level (counted from 0) where it would show wrong.
 std::string resolve_bullet(const std::string &text, std::uint32_t level,
                            std::string_view font_family = {});
 

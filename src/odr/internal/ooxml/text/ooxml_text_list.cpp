@@ -7,7 +7,6 @@
 #include <odr/internal/util/number_util.hpp>
 #include <odr/internal/util/string_util.hpp>
 
-#include <array>
 #include <limits>
 
 namespace odr::internal::ooxml::text {
