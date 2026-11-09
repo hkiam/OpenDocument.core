@@ -33,8 +33,11 @@ The release run heads these entries with the version and opens a fresh
   not a `std::invalid_argument` with an empty message.
 - A slide no longer shows its master page's placeholders: the prompts of
   PowerPoint and Impress layouts such as "Click to edit Master title style"
-  drew over the slide's own title and text. Like LibreOffice, a master page
-  object with a `presentation:class` is not drawn.
+  drew over the slide's own title and text. A master page object with a
+  `presentation:class` is not drawn, and `MasterPage::children` leaves it
+  out. LibreOffice draws title and outline placeholders on no slide either;
+  footer, date and slide number ones it draws where the slide asks for them,
+  which is not read yet, so they are left out as well.
 
 ## v7.7.0 - 2026-10-31
 
