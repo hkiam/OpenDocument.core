@@ -18,9 +18,13 @@ constexpr std::size_t default_probe_size = std::size_t{64} * 1024;
 read_probe(std::istream &in, std::size_t max_bytes = default_probe_size);
 
 /// The encoding of @p probe, @ref TextEncoding::unknown if it cannot be named.
-/// A byte-order mark decides alone, else uchardet guesses — from the probe
-/// only, so an encoding invisible in an ASCII prefix is missed.
-[[nodiscard]] TextEncoding detect(std::string_view probe);
+/// A byte-order mark decides alone. Bytes beyond ascii that are all well
+/// formed utf-8 are utf-8: uchardet weighs a few of them among much ascii by
+/// single-byte statistics and names such text MAC-CENTRALEUROPE or IBM852.
+/// Else uchardet guesses — from the probe only, so an encoding invisible in an
+/// ASCII prefix is missed. A probe @p cut_off from a longer file may end
+/// inside a utf-8 sequence.
+[[nodiscard]] TextEncoding detect(std::string_view probe, bool cut_off = false);
 
 /// Whether @p probe, detected as @p encoding, reads as text: named, and no NUL
 /// outside utf-16 and utf-32 — the test `file(1)` and git use. Empty is text.

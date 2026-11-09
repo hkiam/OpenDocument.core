@@ -166,13 +166,31 @@ TEST(Detect, well_formed_utf8_beyond_ascii_is_utf8) {
 
 TEST(Detect, a_sequence_the_probe_cuts_off_is_still_utf8) {
   const std::string ascii(4096, 'a');
-  EXPECT_EQ(encoding::detect(ascii + "\xc3\xbc\xe2\x82"), TextEncoding::utf8);
+  EXPECT_EQ(encoding::detect(ascii + "\xc3\xbc\xe2\x82", true),
+            TextEncoding::utf8);
+  EXPECT_EQ(encoding::detect(ascii + "\xc3\xbc\xf0\x9f\x98", true),
+            TextEncoding::utf8);
+}
+
+TEST(Detect, a_whole_file_ending_inside_a_sequence_is_not_utf8) {
+  // a short latin-1 file whose one byte beyond ascii is its last
+  EXPECT_NE(encoding::detect("Caf\xe9"), TextEncoding::utf8);
+  EXPECT_NE(encoding::detect(std::string(4096, 'a') + "\xc3\xbc\xe2\x82"),
+            TextEncoding::utf8);
 }
 
 TEST(Detect, malformed_utf8_is_left_to_uchardet) {
   const std::string ascii(4096, 'a');
-  // a lone latin-1 umlaut, an overlong slash and an encoded surrogate
+  // a lone latin-1 umlaut, an overlong slash, an encoded surrogate, a code
+  // point past U+10FFFF and an overlong three-byte form
   EXPECT_NE(encoding::detect(ascii + "\xe4 "), TextEncoding::utf8);
   EXPECT_NE(encoding::detect(ascii + "\xc0\xaf "), TextEncoding::utf8);
   EXPECT_NE(encoding::detect(ascii + "\xed\xa0\x80 "), TextEncoding::utf8);
+  EXPECT_NE(encoding::detect(ascii + "\xf4\x90\x80\x80 "), TextEncoding::utf8);
+  EXPECT_NE(encoding::detect(ascii + "\xe0\x80\xaf "), TextEncoding::utf8);
+}
+
+TEST(Detect, ascii_reads_as_utf8) {
+  // uchardet names it ASCII, a name of utf-8 in the table
+  EXPECT_EQ(encoding::detect(std::string(4096, 'a')), TextEncoding::utf8);
 }
