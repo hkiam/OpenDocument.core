@@ -28,6 +28,9 @@ The release run heads these entries with the version and opens a fresh
 
 ### Fixes
 
+- An odt frame stands at its `style:horizontal-pos` whatever its
+  `style:wrap`, as in LibreOffice. A header logo wrapped `dynamic` and
+  positioned `left` floated right.
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
