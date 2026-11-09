@@ -26,15 +26,19 @@ The release run heads these entries with the version and opens a fresh
   and iOS, for example `server bind failed: 127.0.0.1:29665 (Address already
   in use)`.
 
+### Spreadsheets
+
+- A number, date, time or boolean cell of an ods that the file saved without
+  text shows its value in its data style, as LibreOffice formats it on
+  loading, and counts as content of the sheet. A row of sums saved by
+  LibreOffice 4.2 was blank, and a column of them at the sheet's edge was
+  cut off. `SheetCell::value` states that text too.
+
 ### Fixes
 
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
-- A number, date or time cell of an ods that the file saved without text
-  shows its value in its data style, as LibreOffice formats it on loading.
-  A row of sums saved by LibreOffice 4.2 was blank. `SheetCell::value` states
-  that text too.
 
 ## v7.7.0 - 2026-10-31
 

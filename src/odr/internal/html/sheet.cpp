@@ -704,13 +704,15 @@ void write_row(const SheetRows &rows, RowCursor &at, const WritingState &state,
     const bool numeric = cell_value_type == ValueType::date ||
                          cell_value_type == ValueType::time ||
                          cell_value_type == ValueType::float_number;
-    // read once: a number's value is asked for its spelling and its text
+    // the types a file may state a value of without its text
+    const bool valued = numeric || cell_value_type == ValueType::boolean;
+    // read once: a value is asked for its spelling and its text
     const CellValue read_value =
-        state.config().editable || numeric ? cell.value() : CellValue();
-    const CellValue cell_value =
-        state.config().editable ? read_value : CellValue();
-    const std::string shown =
-        state.config().editable || numeric ? shown_text(cell) : std::string();
+        state.config().editable || valued ? cell.value() : CellValue();
+    static const CellValue no_value;
+    const CellValue &cell_value =
+        state.config().editable ? read_value : no_value;
+    const std::string shown = valued ? shown_text(cell) : std::string();
     // a formatted cell's text need not state the number a sort needs
     const std::optional<std::string> value_spelling =
         state.config().editable ? formatted_value(cell_value, shown)
@@ -820,9 +822,15 @@ void write_row(const SheetRows &rows, RowCursor &at, const WritingState &state,
     if (folded.has_value()) {
       state.out().out() << folded->text;
     } else if (const std::optional<std::string> uncached =
-                   numeric ? uncached_text(read_value, shown) : std::nullopt;
+                   valued ? uncached_text(read_value, shown) : std::nullopt;
                uncached.has_value()) {
       state.out().out() << xml::escape_text(*uncached);
+      // in place of the empty paragraphs; a frame anchored in the cell stays
+      for (const Element child : cell.children()) {
+        if (child.type() != ElementType::paragraph) {
+          translate_element(child, state);
+        }
+      }
     } else {
       translate_cell_children(cell, state);
     }
