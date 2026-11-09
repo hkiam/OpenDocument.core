@@ -29,7 +29,7 @@ The release run heads these entries with the version and opens a fresh
 ### Fixes
 
 - A shape or connector with a stroke width of zero is drawn with a hairline,
-  as LibreOffice draws it, in any document. It was invisible. An odf shape
+  as LibreOffice draws it. It was invisible. An odf shape
   whose style turns the stroke off (`draw:stroke="none"`) is no longer
   outlined with an inherited stroke color; `GraphicStyle::stroke_color` has
   an alpha of 0 for it.
