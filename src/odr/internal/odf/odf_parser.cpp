@@ -6,10 +6,89 @@
 
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <pugixml.hpp>
 
 namespace odr::internal::odf {
+
+bool is_text_field(const std::string_view name) {
+  // [OpenDocument] 7, with the marks that show text of their own
+  static const std::unordered_set<std::string_view> fields{
+      "text:author-initials",
+      "text:author-name",
+      "text:bibliography-mark",
+      "text:bookmark-ref",
+      "text:chapter",
+      "text:character-count",
+      "text:conditional-text",
+      "text:creation-date",
+      "text:creation-time",
+      "text:creator",
+      "text:database-display",
+      "text:database-name",
+      "text:database-row-number",
+      "text:date",
+      "text:dde-connection",
+      "text:description",
+      "text:drop-down",
+      "text:editing-cycles",
+      "text:editing-duration",
+      "text:execute-macro",
+      "text:expression",
+      "text:file-name",
+      "text:image-count",
+      "text:initial-creator",
+      "text:keywords",
+      "text:meta-field",
+      "text:modification-date",
+      "text:modification-time",
+      "text:note-ref",
+      "text:object-count",
+      "text:page-count",
+      "text:page-number",
+      "text:page-variable-get",
+      "text:paragraph-count",
+      "text:placeholder",
+      "text:print-date",
+      "text:print-time",
+      "text:printed-by",
+      "text:reference-ref",
+      "text:sender-city",
+      "text:sender-company",
+      "text:sender-country",
+      "text:sender-email",
+      "text:sender-fax",
+      "text:sender-firstname",
+      "text:sender-initials",
+      "text:sender-lastname",
+      "text:sender-phone-private",
+      "text:sender-phone-work",
+      "text:sender-position",
+      "text:sender-postal-code",
+      "text:sender-state-or-province",
+      "text:sender-street",
+      "text:sender-title",
+      "text:sequence",
+      "text:sequence-ref",
+      "text:sheet-name",
+      "text:subject",
+      "text:table-count",
+      "text:table-formula",
+      "text:template-name",
+      "text:text-input",
+      "text:time",
+      "text:title",
+      "text:user-defined",
+      "text:user-field-get",
+      "text:user-field-input",
+      "text:variable-get",
+      "text:variable-input",
+      "text:variable-set",
+      "text:word-count",
+  };
+  return fields.contains(name);
+}
 
 namespace {
 
@@ -319,6 +398,72 @@ void parse_presentation_children(ElementRegistry &registry,
   }
 }
 
+/// Whether @p node is in a master page's header or footer, which a text
+/// document repeats on each page.
+bool in_page_marginal(const pugi::xml_node node) {
+  for (pugi::xml_node parent = node.parent(); parent;
+       parent = parent.parent()) {
+    const std::string_view name = parent.name();
+    if (name.starts_with("style:header") || name.starts_with("style:footer") ||
+        name == "loext:header-first" || name == "loext:footer-first") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Whether @p node is on a slide, a drawing page or a master page of them.
+bool on_drawing_page(const pugi::xml_node node) {
+  for (pugi::xml_node parent = node.parent(); parent;
+       parent = parent.parent()) {
+    const std::string_view name = parent.name();
+    if (name == "draw:page" || name == "style:master-page") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Whether @p node is a page number with no one number to show. In a header
+/// or footer it is the number of each page the header heads, which a render
+/// without pages does not have, and the text the producer saved is the number
+/// of any one page: Word saves the last. On a slide or a master page Impress
+/// and Draw write a placeholder in angle brackets, `<number>` in the language
+/// of the user interface, and show the number of each slide.
+bool is_unnumbered_page_number(const pugi::xml_node node) {
+  if (std::string_view(node.name()) != "text:page-number") {
+    return false;
+  }
+  const std::string_view text = node.child_value();
+  return in_page_marginal(node) ||
+         (text.size() >= 2 && text.front() == '<' && text.back() == '>' &&
+          on_drawing_page(node));
+}
+
+/// A field shows the text its producer computed when it saved, which is what
+/// LibreOffice shows until it updates the field. A field whose
+/// `text:display` is `none` shows nothing, and so does a page number with no
+/// one number to show.
+std::tuple<ElementIdentifier, pugi::xml_node>
+parse_field(ElementRegistry &registry, const pugi::xml_node node) {
+  if (std::string_view(node.attribute("text:display").value()) == "none" ||
+      is_unnumbered_page_number(node)) {
+    return {null_element_id, pugi::xml_node()};
+  }
+  return parse_element_tree(registry, ElementType::group, node,
+                            parse_any_element_children);
+}
+
+/// Hidden text shows where its condition is false.
+std::tuple<ElementIdentifier, pugi::xml_node>
+parse_hidden_text(ElementRegistry &registry, const pugi::xml_node node) {
+  if (std::string_view(node.attribute("text:is-hidden").value()) != "false") {
+    return {null_element_id, pugi::xml_node()};
+  }
+  return parse_element_tree(registry, ElementType::group, node,
+                            parse_any_element_children);
+}
+
 void parse_spreadsheet_children(ElementRegistry &registry,
                                 const ElementIdentifier root_id,
                                 const pugi::xml_node node) {
@@ -387,8 +532,11 @@ parse_any_element_tree(ElementRegistry &registry, const pugi::xml_node node) {
       // No `text:soft-page-break`: [OpenDocument] 5.1.1 records the
       // producer's own layout there, not an authored break, which is
       // `fo:break-before` on the paragraph style.
-      {"text:date", create_default_tree_parser(ElementType::group)},
-      {"text:time", create_default_tree_parser(ElementType::group)},
+      // A field, which `is_text_field` names, is parsed by `parse_field`.
+      {"text:hidden-text", parse_hidden_text},
+      // a ruby's annotation is not drawn, its base text is
+      {"text:ruby", create_default_tree_parser(ElementType::group)},
+      {"text:ruby-base", create_default_tree_parser(ElementType::group)},
       {"text:section", create_default_tree_parser(ElementType::group)},
       // A master page's header and footer, each its own group, so the
       // renderer can tell them apart (`MasterPage::header`).
@@ -400,8 +548,6 @@ parse_any_element_tree(ElementRegistry &registry, const pugi::xml_node node) {
       {"style:footer-first", create_default_tree_parser(ElementType::group)},
       {"loext:header-first", create_default_tree_parser(ElementType::group)},
       {"loext:footer-first", create_default_tree_parser(ElementType::group)},
-      //{"text:page-number", create_tree_parser(ElementType::group)},
-      //{"text:page-continuation", create_tree_parser(ElementType::group)},
       {"table:table", parse_table},
       {"table:table-column",
        create_default_tree_parser(ElementType::table_column)},
@@ -439,6 +585,9 @@ parse_any_element_tree(ElementRegistry &registry, const pugi::xml_node node) {
   if (const auto constructor_it = parser_table.find(node.name());
       constructor_it != std::end(parser_table)) {
     return constructor_it->second(registry, node);
+  }
+  if (is_text_field(node.name())) {
+    return parse_field(registry, node);
   }
 
   return {null_element_id, pugi::xml_node()};
