@@ -61,6 +61,13 @@ std::string translate_table_row_style(const TableRowStyle &table_row_style);
 std::string translate_table_cell_style(const TableCellStyle &table_cell_style,
                                        bool dark_fill);
 std::string translate_drawing_style(const GraphicStyle &graphic_style);
+/// The css paint of a gradient or hatch fill: a `background-image`, empty
+/// where the fill is solid or none.
+std::string translate_fill_image(const GraphicStyle &graphic_style);
+/// A css mask that keeps only what @p svg_shape, an svg element in a
+/// `preserveAspectRatio="none"` view box @p view_box, covers.
+std::string translate_fill_mask(std::string_view view_box,
+                                std::string_view svg_shape);
 /// Empty for a transform that moves nothing.
 std::string
 translate_drawing_transform(const std::optional<DrawingTransform> &transform);

@@ -61,7 +61,8 @@ private:
                                        TableRowStyle &result);
   static void resolve_table_cell_style_(pugi::xml_node node,
                                         TableCellStyle &result);
-  static void resolve_graphic_style_(pugi::xml_node node, GraphicStyle &result);
+  static void resolve_graphic_style_(const StyleRegistry *registry,
+                                     pugi::xml_node node, GraphicStyle &result);
 };
 
 class StyleRegistry final {
@@ -86,6 +87,15 @@ public:
   [[nodiscard]] pugi::xml_node font_face_node(const std::string &name) const;
 
   [[nodiscard]] pugi::xml_node list_style_node(const std::string &name) const;
+
+  /// The `draw:gradient` named @p name, null where there is none.
+  [[nodiscard]] pugi::xml_node gradient_node(const std::string &name) const;
+  /// The `draw:hatch` named @p name, null where there is none.
+  [[nodiscard]] pugi::xml_node hatch_node(const std::string &name) const;
+  /// The graphic property @p name as @p style states it, else as its nearest
+  /// base or the `graphic` default style does; null where none does.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
+                                                      const char *name) const;
 
   [[nodiscard]] ElementIdentifier master_page(const std::string &name) const;
   [[nodiscard]] ElementIdentifier first_master_page() const;
@@ -125,6 +135,8 @@ private:
   std::unordered_map<std::string, pugi::xml_node> m_index_outline_style;
   std::unordered_map<std::string, pugi::xml_node> m_index_page_layout;
   std::unordered_map<std::string, pugi::xml_node> m_index_master_page;
+  std::unordered_map<std::string, pugi::xml_node> m_index_gradient;
+  std::unordered_map<std::string, pugi::xml_node> m_index_hatch;
   std::optional<std::string> m_first_master_page;
 
   std::unordered_map<std::string, std::unique_ptr<Style>> m_default_styles;

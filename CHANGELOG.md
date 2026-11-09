@@ -26,6 +26,17 @@ The release run heads these entries with the version and opens a fresh
   and iOS, for example `server bind failed: 127.0.0.1:29665 (Address already
   in use)`.
 
+### Rendering
+
+- An odf shape or text box filled with a gradient or a hatch
+  (`draw:fill="gradient"` / `"hatch"`) is painted. It was left empty. The
+  six gradient styles map to css gradients, square and rectangular ones to the
+  ellipse; a hatch is an svg pattern, over its fill color where
+  `draw:fill-hatch-solid` asks for it. Transparency gradients
+  (`draw:opacity-name`) are still not read.
+- `GraphicStyle` carries the new `fill_gradient` (`GradientFill`) and
+  `fill_hatch` (`HatchFill`).
+
 ### Fixes
 
 - A doc, xls or ppt opens when its storage directory gives a stream a child or

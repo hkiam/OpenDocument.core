@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <optional>
+#include <string>
 
 using namespace odr;
 namespace ihtml = odr::internal::html;
@@ -200,4 +201,70 @@ TEST(html_document_style, drawing_transform_writes_the_linear_part_last) {
   EXPECT_EQ(ihtml::translate_drawing_transform(transform),
             "transform:translate(1cm,2cm) matrix(0,1,-1,0,0,0);"
             "transform-origin:0 0;");
+}
+
+TEST(html_document_style, fill_image_is_empty_for_a_solid_fill) {
+  GraphicStyle style;
+  style.fill_color = Color(0, 255, 0);
+  EXPECT_EQ(ihtml::translate_fill_image(style), "");
+}
+
+TEST(html_document_style, fill_image_turns_a_linear_gradient_clockwise) {
+  // [OpenDocument] turns 30° counterclockwise from top-to-bottom; css turns
+  // clockwise from bottom-to-top.
+  GraphicStyle style;
+  style.fill_gradient = GradientFill{.style = GradientStyle::linear,
+                                     .start_color = Color(255, 0, 0),
+                                     .end_color = Color(0, 0, 255),
+                                     .angle = 30,
+                                     .border = 0.2};
+  EXPECT_EQ(ihtml::translate_fill_image(style),
+            "background-image:linear-gradient(150deg,#ff0000 20%,#0000ff "
+            "100%);");
+}
+
+TEST(html_document_style, fill_image_mirrors_an_axial_gradient) {
+  GraphicStyle style;
+  style.fill_gradient = GradientFill{.style = GradientStyle::axial,
+                                     .start_color = Color(255, 0, 0),
+                                     .end_color = Color(0, 0, 255)};
+  EXPECT_EQ(ihtml::translate_fill_image(style),
+            "background-image:linear-gradient(180deg,#ff0000 0%,#0000ff "
+            "50%,#ff0000 100%);");
+}
+
+TEST(html_document_style, fill_image_reaches_a_radial_gradient_to_the_corner) {
+  GraphicStyle style;
+  style.fill_gradient = GradientFill{.style = GradientStyle::radial,
+                                     .start_color = Color(128, 0, 0),
+                                     .end_color = Color(255, 255, 0),
+                                     .center_x = 0.3,
+                                     .center_y = 0.3};
+  EXPECT_EQ(ihtml::translate_fill_image(style),
+            "background-image:radial-gradient(70.711% 70.711% at 30% "
+            "30%,#ffff00 0%,#800000 100%);");
+}
+
+TEST(html_document_style, fill_image_draws_a_crossed_hatch_as_two_patterns) {
+  GraphicStyle style;
+  style.fill_hatch = HatchFill{.style = HatchStyle::crossed,
+                               .color = Color(0, 0, 0),
+                               .distance = Measure("0.1cm"),
+                               .rotation = 45};
+  const std::string image = ihtml::translate_fill_image(style);
+  EXPECT_TRUE(image.starts_with("background-image:url('data:image/svg+xml,"));
+  // percent-encoded: nothing in it ends the url or the attribute
+  EXPECT_EQ(image.find_first_of("\"<>#'", 46), image.size() - 3);
+  EXPECT_NE(image.find("rotate%28-45%29"), std::string::npos);
+  EXPECT_NE(image.find("rotate%28-135%29"), std::string::npos);
+  EXPECT_EQ(image.find("rotate%28-90%29"), std::string::npos);
+}
+
+TEST(html_document_style, fill_mask_scales_the_shape_to_the_box) {
+  const std::string mask = ihtml::translate_fill_mask(
+      "0 0 2 2", R"(<ellipse cx="1" cy="1" rx="1" ry="1"/>)");
+  EXPECT_NE(mask.find("-webkit-mask-image:url('data:image/svg+xml,"),
+            std::string::npos);
+  EXPECT_NE(mask.find("preserveAspectRatio=%22none%22"), std::string::npos);
+  EXPECT_NE(mask.find("mask-size:100% 100%;"), std::string::npos);
 }
