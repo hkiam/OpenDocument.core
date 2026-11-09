@@ -316,6 +316,13 @@ PageLayout read_page_layout(const pugi::xml_node node) {
   return result;
 }
 
+/// PowerPoint's references to the fonts of its theme, `+mn-lt` and
+/// `+mj-ea`, which it writes into an odp unresolved. LibreOffice knows no
+/// such family and falls back to its default, as the renderer does.
+bool is_theme_font(const std::string_view family) {
+  return family.empty() || family.front() == '+';
+}
+
 void read_font_face(const char *name, const pugi::xml_node node,
                     TextStyle &result) {
   if (!node) {
@@ -371,6 +378,11 @@ void Style::resolve_text_style_(const StyleRegistry *registry,
           text_properties.attribute("style:font-name")) {
     read_font_face(font_name.value(),
                    registry->font_face_node(font_name.value()), result);
+  } else if (const pugi::xml_attribute font_family =
+                 text_properties.attribute("fo:font-family");
+             font_family && !is_theme_font(font_family.value())) {
+    // PowerPoint names the family itself rather than a declared font face
+    result.font_name = font_family.value();
   }
   if (const std::optional<Measure> font_size =
           read_measure(text_properties.attribute("fo:font-size"));
