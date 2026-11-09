@@ -50,7 +50,9 @@ namespace odr::internal::odf {
 namespace {
 std::unique_ptr<abstract::ElementAdapter>
 create_element_adapter(Document &document, ElementRegistry &registry);
-}
+bool gradient_angles_in_tenths(std::string_view office_version,
+                               std::string_view generator);
+} // namespace
 
 Document::Document(const FileType file_type, const DocumentType document_type,
                    std::shared_ptr<abstract::ReadableFilesystem> files,
@@ -80,7 +82,17 @@ void Document::init_(const pugi::xml_node content_root,
   m_root_element = parse_tree(m_element_registry,
                               content_root.child("office:body").first_child());
 
-  m_style_registry = StyleRegistry(*this, content_root, styles_root);
+  pugi::xml_document meta_xml;
+  pugi::xml_node meta = content_root.child("office:meta");
+  if (!meta && m_files != nullptr && m_files->is_file(AbsPath("/meta.xml"))) {
+    meta_xml = xml::parse(*m_files, AbsPath("/meta.xml"));
+    meta = meta_xml.document_element().child("office:meta");
+  }
+  m_style_registry =
+      StyleRegistry(*this, content_root, styles_root,
+                    gradient_angles_in_tenths(
+                        content_root.attribute("office:version").value(),
+                        meta.child("meta:generator").text().get()));
 
   resolve_list_numbering(m_element_registry, m_style_registry, m_root_element);
 
@@ -256,6 +268,35 @@ void remove_value_attributes(pugi::xml_node node) {
   for (const char *attribute : stated) {
     node.remove_attribute(attribute);
   }
+}
+
+/// Whether the producer wrote a unitless gradient `draw:angle` in tenths of a
+/// degree, as LibreOffice reads it (`xmloff/source/style/GradientStyle.cxx`):
+/// below ODF 1.2, from OpenOffice.org, StarOffice and Apache OpenOffice, and
+/// from LibreOffice before 7. Anyone else meant degrees ([OpenDocument]
+/// 18.3.1).
+bool gradient_angles_in_tenths(const std::string_view office_version,
+                               const std::string_view generator) {
+  if (const std::optional<double> version = util::number::parse(office_version);
+      version.has_value() && *version < 1.2) {
+    return true;
+  }
+  for (const std::string_view name :
+       {"OpenOffice.org", "StarOffice", "Apache_OpenOffice", "OpenOffice/"}) {
+    if (generator.starts_with(name)) {
+      return true;
+    }
+  }
+  for (const std::string_view name : {"LibreOffice/", "LibreOfficeDev/"}) {
+    if (generator.starts_with(name)) {
+      std::uint32_t major = 0;
+      const std::string_view rest = generator.substr(name.size());
+      return std::from_chars(rest.data(), rest.data() + rest.size(), major)
+                     .ec == std::errc{} &&
+             major < 7;
+    }
+  }
+  return false;
 }
 
 /// Boolean `&` uses words from LibreOffice 27.2 (commit 5663da9fa7).
@@ -2194,10 +2235,12 @@ public:
         result.fill_color.has_value() && result.fill_color->alpha == 0 &&
         !result.fill_gradient.has_value() && !result.fill_hatch.has_value() &&
         !m_document->style_registry().graphic_attribute(
-            get_node(element_id).attribute("draw:style-name").value(),
-            "draw:fill")) {
+            style_name_or_empty(element_id), "draw:fill")) {
       result.fill_color->alpha = 255;
     }
+    // A shadow belongs to the shape that states it; one stated on a frame
+    // around it is cast once, not again by every shape inside.
+    result.shadow = get_partial_style(element_id).graphic_style.shadow;
     return result;
   }
 
@@ -2703,6 +2746,12 @@ private:
       return "\t";
     }
     return "";
+  }
+
+  [[nodiscard]] const char *
+  style_name_or_empty(const ElementIdentifier element_id) const {
+    const char *name = get_style_name(element_id);
+    return name != nullptr ? name : "";
   }
 
   [[nodiscard]] const char *
