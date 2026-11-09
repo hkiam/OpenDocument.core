@@ -261,3 +261,168 @@ TEST(OdfMasterPage, a_document_without_a_header_writes_no_header_box) {
   EXPECT_NE(page.find(R"(class="odr-page-inner")"), std::string::npos);
   EXPECT_EQ(page.find("odr-page-body"), std::string::npos);
 }
+
+namespace {
+
+/// A flat text document with @p body, the automatic styles @p styles and the
+/// master pages @p master_pages.
+std::string flat_pages(const std::string &body, const std::string &styles,
+                       const std::string &master_pages) {
+  return R"(<?xml version="1.0" encoding="UTF-8"?>)"
+         R"(<office:document office:mimetype=")"
+         R"(application/vnd.oasis.opendocument.text">)"
+         R"(<office:automatic-styles>)" +
+         styles + R"(</office:automatic-styles><office:master-styles>)" +
+         master_pages + R"(</office:master-styles><office:body><office:text>)" +
+         body + R"(</office:text></office:body></office:document>)";
+}
+
+Document document_of(const std::string &source) {
+  return odr::open(File::from_memory(source)).as_document_file().document();
+}
+
+std::string html_of(const std::string &source) {
+  HtmlConfig config;
+  config.text_document_margin = true;
+  std::ostringstream html;
+  html::translate(odr::open(File::from_memory(source)), config)
+      .list_views()
+      .at(0)
+      .write_html(html);
+  return html.str();
+}
+
+/// A paragraph style naming the master page @p master_page.
+std::string opening(const std::string &style, const std::string &master_page) {
+  return R"(<style:style style:name=")" + style +
+         R"(" style:family="paragraph" style:master-page-name=")" +
+         master_page + R"("/>)";
+}
+
+} // namespace
+
+TEST(OdfMasterPage, an_empty_paragraph_keeps_the_default_on_page_one) {
+  // LibreOffice: the first content's master page is page one's, and an empty
+  // paragraph is content
+  const std::string html = html_of(flat_pages(
+      R"(<text:p/><text:p text:style-name="Wide">Landscape</text:p>)",
+      opening("Wide", "Landscape"),
+      R"(<style:master-page style:name="Standard"><style:header>)"
+      R"(<text:p>Standard head</text:p></style:header></style:master-page>)"
+      R"(<style:master-page style:name="Landscape"><style:header>)"
+      R"(<text:p>Wide head</text:p></style:header></style:master-page>)"));
+  EXPECT_EQ(count(html, "Standard head"), 1U);
+  EXPECT_EQ(count(html, "Wide head"), 1U);
+}
+
+TEST(OdfMasterPage, standard_is_the_default_master_page) {
+  const std::string html = html_of(flat_pages(
+      R"(<text:p>Body</text:p>)", "",
+      R"(<style:master-page style:name="First"><style:header>)"
+      R"(<text:p>First head</text:p></style:header></style:master-page>)"
+      R"(<style:master-page style:name="Standard"><style:header>)"
+      R"(<text:p>Standard head</text:p></style:header></style:master-page>)"));
+  EXPECT_EQ(count(html, "Standard head"), 1U);
+  EXPECT_EQ(count(html, "First head"), 0U);
+}
+
+TEST(OdfMasterPage, an_empty_master_page_name_opens_no_page) {
+  // the style states that it opens none, so its parent's name does not count
+  const Document document = document_of(flat_pages(
+      R"(<text:p>one</text:p><text:p text:style-name="Child">two</text:p>)",
+      opening("Parent", "Landscape") +
+          R"(<style:style style:name="Child" style:family="paragraph")"
+          R"( style:parent-style-name="Parent" style:master-page-name=""/>)",
+      R"(<style:master-page style:name="Standard"/>)"
+      R"(<style:master-page style:name="Landscape"/>)"));
+  EXPECT_FALSE(document.root_element()
+                   .first_child()
+                   .next_sibling()
+                   .as_paragraph()
+                   .master_page());
+}
+
+TEST(OdfMasterPage, naming_the_master_page_in_use_again_opens_no_run) {
+  // LibreOffice shows the first page's header on page one only
+  const std::string html = html_of(flat_pages(
+      R"(<text:p>one</text:p><text:p text:style-name="Again">two</text:p>)",
+      opening("Again", "Standard"),
+      R"(<style:master-page style:name="Standard"><style:header>)"
+      R"(<text:p>Running head</text:p></style:header><style:header-first>)"
+      R"(<text:p>Title head</text:p></style:header-first>)"
+      R"(</style:master-page>)"));
+  EXPECT_EQ(count(html, "Title head"), 1U);
+  EXPECT_EQ(count(html, "Running head"), 1U);
+}
+
+TEST(OdfMasterPage, a_first_page_header_needs_a_header) {
+  const std::string html = html_of(flat_pages(
+      R"(<text:p>one</text:p>)", "",
+      R"(<style:master-page style:name="Standard"><loext:header-first>)"
+      R"(<text:p>Title head</text:p></loext:header-first>)"
+      R"(</style:master-page>)"));
+  EXPECT_EQ(count(html, "Title head"), 0U);
+}
+
+TEST(OdfMasterPage, loext_names_a_first_page_header_too) {
+  const std::string html = html_of(flat_pages(
+      R"(<text:p>one</text:p>)", "",
+      R"(<style:master-page style:name="Standard"><style:header>)"
+      R"(<text:p>Running head</text:p></style:header><loext:header-first>)"
+      R"(<text:p>Title head</text:p></loext:header-first>)"
+      R"(</style:master-page>)"));
+  EXPECT_EQ(count(html, "Title head"), 1U);
+  EXPECT_EQ(count(html, "Running head"), 0U);
+}
+
+TEST(OdfMasterPage, master_pages_alternate_and_an_unknown_next_is_the_same) {
+  const Document document = document_of(flat_pages(
+      R"(<text:p>one</text:p>)", "",
+      R"(<style:master-page style:name="Standard")"
+      R"( style:next-style-name="Left"/><style:master-page style:name="Left")"
+      R"( style:next-style-name="Standard"/><style:master-page)"
+      R"( style:name="Lost" style:next-style-name="Nowhere"/>)"));
+  const MasterPage standard =
+      document.root_element().as_text_root().first_master_page();
+  EXPECT_EQ(standard.next_master_page().next_master_page(), standard);
+  EXPECT_NE(standard.next_master_page(), standard);
+}
+
+TEST(OdfMasterPage, a_later_page_without_a_size_keeps_its_margins) {
+  const std::string html = html_of(flat_pages(
+      R"(<text:p>one</text:p><text:p text:style-name="Narrow">two</text:p>)",
+      opening("Narrow", "Narrow") +
+          R"(<style:page-layout style:name="pm1"><style:page-layout-properties)"
+          R"( fo:page-width="21cm" fo:page-height="29.7cm")"
+          R"( fo:margin-left="4.5cm"/></style:page-layout>)"
+          R"(<style:page-layout style:name="pm2"><style:page-layout-properties)"
+          R"( fo:margin-left="2cm"/></style:page-layout>)",
+      R"(<style:master-page style:name="Standard")"
+      R"( style:page-layout-name="pm1"/><style:master-page style:name="Narrow")"
+      R"( style:page-layout-name="pm2"/>)"));
+  EXPECT_EQ(count(html, R"(class="odr-page-inner" style="margin-left:4.5cm;")"),
+            1U);
+  EXPECT_EQ(count(html, R"(class="odr-page-inner" style="margin-left:2cm;")"),
+            1U);
+  EXPECT_EQ(count(html, R"(style="width:21cm;min-height:29.7cm;")"), 2U);
+}
+
+TEST(OdfMasterPage, a_footer_numbers_its_lists) {
+  const Document document = document_of(flat_pages(
+      R"(<text:p>one</text:p>)",
+      R"(<text:list-style style:name="L1"><text:list-level-style-number)"
+      R"( text:level="1" style:num-format="1" style:num-suffix="."/>)"
+      R"(</text:list-style>)",
+      R"(<style:master-page style:name="Standard"><style:footer>)"
+      R"(<text:list text:style-name="L1"><text:list-item><text:p>a</text:p>)"
+      R"(</text:list-item><text:list-item><text:p>b</text:p>)"
+      R"(</text:list-item></text:list></style:footer></style:master-page>)"));
+  const Element list = document.root_element()
+                           .as_text_root()
+                           .first_master_page()
+                           .footer()
+                           .first_child();
+  ASSERT_EQ(list.type(), ElementType::list);
+  EXPECT_EQ(list.first_child().as_list_item().marker(), "1.");
+  EXPECT_EQ(list.first_child().next_sibling().as_list_item().marker(), "2.");
+}

@@ -699,22 +699,28 @@ private:
 
     const auto begin_page = [&] {
       // the first box keeps the text root's layout, the size it may have
-      // fallen back to included
+      // fallen back to included, and so does a box of a format without master
+      // pages; a later one without a size of its own takes that size and keeps
+      // its margins
       PageLayout page_layout = element.page_layout();
-      if (!first_box) {
-        if (const PageLayout own = master_page.page_layout();
-            own.width.has_value()) {
-          page_layout = own;
+      if (!first_box && master_page) {
+        PageLayout own = master_page.page_layout();
+        if (!own.width.has_value()) {
+          own.width = page_layout.width;
+          own.height = page_layout.height;
         }
+        page_layout = own;
       }
       first_box = false;
       Element header = master_page.header();
       footer = master_page.footer();
+      // the first page's header is a variant of the header, so a page
+      // without a header has none either
       if (opens_run) {
-        if (const Element first = master_page.first_header(); first) {
+        if (const Element first = master_page.first_header(); first && header) {
           header = first;
         }
-        if (const Element first = master_page.first_footer(); first) {
+        if (const Element first = master_page.first_footer(); first && footer) {
           footer = first;
         }
       }
@@ -763,7 +769,7 @@ private:
       out.write_element_end("div");
       out.write_element_end("div");
       const MasterPage next = master_page.next_master_page();
-      opens_run = !(next == master_page);
+      opens_run = next != master_page;
       master_page = next;
     };
 
@@ -782,10 +788,12 @@ private:
                                    ? child.as_paragraph().master_page()
                                    : MasterPage();
       if ((pending_break || breaks_page_before(child) || named) && !empty) {
+        const MasterPage previous = master_page;
         end_page();
+        // naming the master page in use again opens a page, not a run
         if (named) {
           master_page = named;
-          opens_run = true;
+          opens_run = named != previous;
         }
         begin_page();
         empty = true;

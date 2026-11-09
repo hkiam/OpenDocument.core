@@ -30,14 +30,16 @@ The release run heads these entries with the version and opens a fresh
 
 - With `text_document_margin`, an odt's page box carries the header and the
   footer of its master page, its first page's (`style:header-first`) where
-  the box opens a run of that master page. A paragraph naming a master page
-  opens a box of that page's size, as it opens a page in LibreOffice; a later
-  box takes the next master page (`style:next-style-name`). The header's
-  height holds its spacing, as in LibreOffice. A box is a run between breaks,
-  not a page, so a page number field shows the number the file stored;
-  `style:header-left` and the header's own margins, border and background are
-  not read. In an editable view the header and footer carry no editing
-  address.
+  the box opens a run of that master page and the page has a header or
+  footer. A paragraph naming another master page opens a box of that page's
+  size and margins, as it opens a page in LibreOffice; a later box takes the
+  next master page (`style:next-style-name`), and page one takes the first
+  content's master page, else "Standard". The header's height holds its
+  spacing, as in LibreOffice, and its lists are numbered. A box is a run
+  between breaks, not a page; `style:header-left`, the header's own margins,
+  border and background, and a master page named inside a section, list or
+  table are not read. In an editable view the header and footer carry no
+  editing address.
 
 ### API, files and saving
 
