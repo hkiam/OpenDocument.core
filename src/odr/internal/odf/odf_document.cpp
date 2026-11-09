@@ -1837,6 +1837,32 @@ public:
   }
 
   [[nodiscard]] ElementIdentifier
+  master_page_first_header(const ElementIdentifier element_id) const override {
+    const ElementIdentifier header =
+        master_page_child(element_id, "style:header-first");
+    return header != null_element_id
+               ? header
+               : master_page_child(element_id, "loext:header-first");
+  }
+
+  [[nodiscard]] ElementIdentifier
+  master_page_first_footer(const ElementIdentifier element_id) const override {
+    const ElementIdentifier footer =
+        master_page_child(element_id, "style:footer-first");
+    return footer != null_element_id
+               ? footer
+               : master_page_child(element_id, "loext:footer-first");
+  }
+
+  [[nodiscard]] ElementIdentifier
+  paragraph_master_page(const ElementIdentifier element_id) const override {
+    const char *style_name = get_style_name(element_id);
+    return style_name == nullptr
+               ? null_element_id
+               : m_document->style_registry().master_page_of_style(style_name);
+  }
+
+  [[nodiscard]] ElementIdentifier
   master_page_next(const ElementIdentifier element_id) const override {
     if (const pugi::xml_attribute next =
             get_node(element_id).attribute("style:next-style-name")) {
