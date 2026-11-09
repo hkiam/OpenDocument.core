@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace odr::internal {
@@ -37,6 +38,15 @@ struct ListMarker final {
 };
 
 std::string format_list_number(ListNumberFormat format, std::uint32_t number);
+
+/// A bullet character in Unicode. Word sets its bullets in Symbol or Wingdings
+/// at private-use code points U+F020 to U+F0FF. In any other font they show as
+/// a box. @p font_family is the family the bullet is set in, or empty if it is
+/// unknown. Any font other than Symbol is read as Wingdings. A private-use
+/// character without a mapping, or an empty or malformed @p text, gives a
+/// default for @p level (counted from 0).
+std::string resolve_bullet(const std::string &text, std::uint32_t level,
+                           std::string_view font_family = {});
 
 /// The counters of one list, indexed by level.
 class ListCounter final {

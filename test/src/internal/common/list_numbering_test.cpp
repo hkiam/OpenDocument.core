@@ -153,3 +153,33 @@ TEST(ListCounter, starts_a_level_without_counting) {
   counter.start(0, outer);
   EXPECT_EQ("5.", counter.advance(0, outer));
 }
+
+TEST(ResolveBullet, a_symbol_font_bullet_becomes_its_unicode_character) {
+  // Word's bullets: Symbol's dot and Wingdings' square at private-use points
+  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "•");
+  EXPECT_EQ(resolve_bullet("", 1, "'Symbol'"), "•");
+  EXPECT_EQ(resolve_bullet("", 1, "Wingdings"), "▪");
+  EXPECT_EQ(resolve_bullet("", 0, "Wingdings"), "➢");
+  EXPECT_EQ(resolve_bullet("", 0, "Wingdings"), "✔");
+  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "−");
+}
+
+TEST(ResolveBullet, the_font_tells_the_same_byte_apart) {
+  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "♣");
+  EXPECT_EQ(resolve_bullet("", 0, "Wingdings"), "▪");
+  // an unknown font is read as Wingdings, as before the font was asked
+  EXPECT_EQ(resolve_bullet("", 0, ""), "▪");
+}
+
+TEST(ResolveBullet, an_unmapped_private_use_bullet_takes_the_level_default) {
+  EXPECT_EQ(resolve_bullet("", 1, "Wingdings"), "◦");
+  EXPECT_EQ(resolve_bullet("", 0, "Symbol"), "•");
+  EXPECT_EQ(resolve_bullet("", 2, "Marlett"), "▪");
+}
+
+TEST(ResolveBullet, other_text_is_kept) {
+  EXPECT_EQ(resolve_bullet("–", 0, "Symbol"), "–");
+  EXPECT_EQ(resolve_bullet("o", 1, "Courier New"), "o");
+  EXPECT_EQ(resolve_bullet("", 1), "◦");
+  EXPECT_EQ(resolve_bullet("\xff", 0), "•");
+}

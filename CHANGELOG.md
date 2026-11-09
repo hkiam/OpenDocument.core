@@ -49,6 +49,11 @@ The release run heads these entries with the version and opens a fresh
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
+- A list bullet that Word set in Symbol or Wingdings at a private-use code
+  point, such as Symbol's dot U+F0B7 and Wingdings' square U+F0A7, shows as
+  its Unicode character in an odt too, not as a box. In a docx, the bullet's
+  font now tells Symbol and Wingdings apart, so Symbol's dot is a dot on every
+  level.
 
 ## v7.7.0 - 2026-10-31
 

@@ -242,3 +242,21 @@ TEST(OdfList, a_table_page_break_or_cached_label_before_the_paragraph_count) {
                 numbered_list_style)),
             (std::vector<std::string>{"1.", "2.", "3.", "4."}));
 }
+
+TEST(OdfList, a_symbol_font_bullet_is_drawn_as_its_character) {
+  // as Word writes a bullet list into an odt
+  const std::string html = render(flat_text(
+      list(item(paragraph("one"))),
+      R"(<office:font-face-decls><style:font-face style:name="Symbol")"
+      R"( svg:font-family="Symbol"/></office:font-face-decls>)"
+      R"(<office:automatic-styles><text:list-style style:name="L1">)"
+      R"(<text:list-level-style-bullet text:level="1")"
+      R"( text:bullet-char=")"
+      "\xef\x82\xb7"
+      R"("><style:text-properties)"
+      R"( style:font-name="Symbol"/></text:list-level-style-bullet>)"
+      R"(</text:list-style></office:automatic-styles>)"));
+
+  EXPECT_EQ(count(html, "\xef\x82\xb7"), 0U);
+  EXPECT_GE(count(html, "•"), 1U);
+}

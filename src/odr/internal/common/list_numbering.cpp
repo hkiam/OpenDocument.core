@@ -1,6 +1,7 @@
 #include <odr/internal/common/list_numbering.hpp>
 
 #include <odr/internal/util/number_util.hpp>
+#include <odr/internal/util/string_util.hpp>
 
 #include <algorithm>
 #include <array>
@@ -49,6 +50,58 @@ std::string format_roman(std::uint32_t number, const bool upper) {
     }
   }
   return result;
+}
+
+/// The characters of the Symbol font that lists use, by their byte, in
+/// Unicode, after Adobe's `symbol.txt`.
+std::string_view symbol_character(const char32_t byte) {
+  switch (byte) {
+  case 0x2A:
+    return "∗";
+  case 0x2D:
+    return "−";
+  case 0x3E:
+    return ">";
+  case 0xA7:
+    return "♣";
+  case 0xA8:
+    return "♦";
+  case 0xAE:
+    return "→";
+  case 0xB7:
+    return "•";
+  case 0xBE:
+    return "⎯";
+  case 0xD8:
+    return "¬";
+  case 0xDE:
+    return "⇒";
+  case 0xE0:
+    return "◊";
+  default:
+    return {};
+  }
+}
+
+/// The characters of the Wingdings font that lists use, by their byte, in
+/// Unicode.
+std::string_view wingdings_character(const char32_t byte) {
+  switch (byte) {
+  case 0x6E:
+    return "■";
+  case 0x75:
+    return "❖";
+  case 0xA7:
+    return "▪";
+  case 0xA8:
+    return "◆";
+  case 0xD8:
+    return "➢";
+  case 0xFC:
+    return "✔";
+  default:
+    return {};
+  }
 }
 
 } // namespace
@@ -165,6 +218,40 @@ void ListCounter::grow_(const std::uint32_t level) {
     m_numbers.resize(static_cast<std::size_t>(level) + 1);
     m_formats.resize(level + 1, ListNumberFormat::decimal);
   }
+}
+
+} // namespace odr::internal
+
+namespace odr::internal {
+
+std::string resolve_bullet(const std::string &text, const std::uint32_t level,
+                           const std::string_view font_family) {
+  static constexpr std::array<const char *, 3> defaults{"•", "◦", "▪"};
+
+  if (text.empty() || !util::string::is_valid_utf8(text)) {
+    return defaults[level % defaults.size()];
+  }
+
+  std::string_view remaining = text;
+  const char32_t first = util::string::next_utf8(remaining);
+  if (first < 0xE000 || first > 0xF8FF) {
+    return text;
+  }
+
+  // the families come quoted from `svg:font-family`
+  const std::string_view family =
+      util::string::trim_view(font_family, [](const char c) {
+        return c == '\'' || c == '"' || util::string::is_ascii_whitespace(c);
+      });
+  const std::string_view character =
+      first < 0xF020 || first > 0xF0FF ? std::string_view{}
+      : util::string::equals_ignore_case(family, "Symbol")
+          ? symbol_character(first - 0xF000)
+          : wingdings_character(first - 0xF000);
+  if (character.empty()) {
+    return defaults[level % defaults.size()];
+  }
+  return std::string(character);
 }
 
 } // namespace odr::internal
