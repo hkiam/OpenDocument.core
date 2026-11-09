@@ -193,7 +193,7 @@ unknown mimetype are tolerated.
 | `odf_parser.{hpp,cpp}` | `content.xml` to registry: dispatch table, run coalescing, sheet cursor |
 | `odf_document.{hpp,cpp}` | `Document` (owns the DOMs, the registry and the adapter), the `ElementAdapter`, edit and `save` |
 | `odf_style.{hpp,cpp}` | `StyleRegistry` and `Style`: indices, eager flatten, master pages, `ResolvedStyle` readers, `create_text_style` |
-| `odf_list.{hpp,cpp}` | List styles resolved to markers |
+| `odf_list.{hpp,cpp}` | List styles and the outline resolved to markers |
 | `odf_table.{hpp,cpp}`, `odf_value_cursor.hpp` | Table and cell helpers |
 | `odf_geometry.{hpp,cpp}`, `odf_enhanced_geometry.{hpp,cpp}` | Shape paths, transforms, `draw:enhanced-path` |
 | `odf_chart.{hpp,cpp}` | Charts drawn from an embedded chart object |
@@ -222,7 +222,6 @@ Larger tables fall back to the embedded replacement image.
 4. **Style gaps.** `transparent` reads as no colour; as a background it clears
    the inherited one (`// TODO use alpha`). Other alpha colours are not parsed.
    The style-versus-element cascade is provisional (`// TODO use override?`).
-   `text:outline-style` is indexed but not applied to headings.
 5. **StarOffice, template and flat mimetypes** are aliased onto the four base
    types (`odf_meta.cpp`). A flat document is parsed twice: once to recognise
    it, once to build the tree.

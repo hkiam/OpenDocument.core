@@ -6,6 +6,7 @@
 #include <odr/internal/odf/odf_element_registry.hpp>
 #include <odr/internal/odf/odf_style.hpp>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -91,7 +92,7 @@ ListLevel read_level(const pugi::xml_node list_style,
         if (joined) {
           result.label += ".";
         }
-        result.label += "%" + std::to_string(i + 1);
+        result.label += "%{" + std::to_string(i + 1) + "}";
         joined = true;
       }
     }
@@ -110,6 +111,9 @@ ListLevel read_level(const pugi::xml_node list_style,
   }
   return result;
 }
+
+/// LibreOffice's outline has ten levels and reads a deeper one as the tenth.
+constexpr std::uint32_t max_outline_level = 10;
 
 bool is_ordered(const ListNumberFormat format) {
   return format != ListNumberFormat::bullet && format != ListNumberFormat::none;
@@ -157,8 +161,18 @@ private:
 
   [[nodiscard]] ListLevel level_at_(const std::string &style_name,
                                     const std::uint32_t level) const {
-    return read_level(
-        level_style_node(m_styles->list_style_node(style_name), level), level);
+    return read_level(m_styles->list_style_node(style_name), level);
+  }
+
+  /// LibreOffice opens each level above @p level that no item has opened yet
+  /// at its start, so an item that skips a level reads "1.1" and the next one
+  /// on the skipped level is its second.
+  static void start_skipped_levels(ListCounter &counter,
+                                   const pugi::xml_node list_style,
+                                   const std::uint32_t level) {
+    for (std::uint32_t skipped = 0; skipped < level; ++skipped) {
+      counter.start(skipped, read_level(list_style, skipped));
+    }
   }
 
   void walk_list_(const ElementIdentifier id,
@@ -204,41 +218,38 @@ private:
     if (outline_level == 0 || !outline_style) {
       return;
     }
-    const std::uint32_t level = outline_level - 1;
+    // the level sizes the counters, so a file must not choose it freely
+    const std::uint32_t level = std::min(outline_level, max_outline_level) - 1;
 
-    ListLevel list_level =
-        read_level(level_style_node(outline_style, level), level);
+    ListLevel list_level = read_level(outline_style, level);
     if (node.attribute("text:restart-numbering").as_bool()) {
-      list_level.start = node.attribute("text:start-value").as_uint(1);
+      list_level.start =
+          node.attribute("text:start-value").as_uint(list_level.start);
       m_outline.restart(level, 0);
     }
 
+    start_skipped_levels(m_outline, outline_style, level);
     ListMarker marker;
     marker.text = m_outline.advance(level, list_level);
-    if (marker.text.empty()) {
-      return;
+    if (!marker.text.empty()) {
+      m_registry->set_list_marker(id, std::move(marker));
     }
-    if (is_ordered(list_level.format)) {
-      marker.number = m_outline.number(level);
-    }
-    m_registry->set_list_marker(id, std::move(marker));
   }
 
-  /// Whether a list item has a paragraph of its own to carry a number. Word
-  /// writes an item of a deeper level as an item of each level above that
-  /// holds nothing but the nested list. LibreOffice numbers paragraphs, so
-  /// such an item is neither labelled nor counted.
+  /// Whether a list item has a paragraph of its own to carry a number, before
+  /// any nested list. Word writes an item of a deeper level as an item of each
+  /// level above that holds nothing but the nested list. LibreOffice numbers
+  /// paragraphs, so such an item is neither labelled nor counted. A table, a
+  /// page break or the label a producer cached may come first.
   static bool has_own_paragraph(const pugi::xml_node list_item) {
     for (const pugi::xml_node child : list_item.children()) {
-      if (child.type() != pugi::node_element) {
-        continue;
-      }
       const std::string_view name = child.name();
-      // the label a producer cached for us
-      if (name == "text:number") {
-        continue;
+      if (name == "text:p" || name == "text:h") {
+        return true;
       }
-      return name == "text:p" || name == "text:h";
+      if (name == "text:list") {
+        return false;
+      }
     }
     return false;
   }
@@ -260,6 +271,8 @@ private:
         counter.restart(level, 0);
       }
 
+      start_skipped_levels(counter, m_styles->list_style_node(style_name),
+                           level);
       ListMarker marker;
       marker.text = counter.advance(level, list_level);
       if (is_ordered(list_level.format)) {
