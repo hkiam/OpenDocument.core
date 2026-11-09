@@ -45,6 +45,11 @@ The release run heads these entries with the version and opens a fresh
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
+- The fields of an odt show the text their producer saved, read-only; only
+  date and time did. A field displayed as `none`, hidden text saved as
+  hidden, and a page number in a header, footer or Impress placeholder stay
+  empty.
+- An odt's ruby shows its base text; it showed nothing.
 
 ## v7.7.0 - 2026-10-31
 

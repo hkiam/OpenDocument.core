@@ -29,9 +29,21 @@ StoredId>` with the payload tables `m_texts`, `m_tables`, `m_sheets`,
 **Parsing is a name-keyed dispatch table.** `odf_parser.cpp` maps an XML tag to
 a `TreeParser`. An unknown tag is skipped, and the recursion continues into its
 children. Many tags collapse onto a generic type: `text:h` is a paragraph,
-`text:section`, `text:table-of-content` and date fields are a `group`,
-`draw:g` is a frame. A container gets its own children parser
+`text:section`, `text:table-of-content` and the fields (`is_text_field`) are a
+`group`, `draw:g` is a frame. A container gets its own children parser
 (`parse_presentation_children` walks only `draw:page`).
+
+**A field shows the text its producer saved.** That is what LibreOffice shows
+until it updates the field, and it is read-only, as LibreOffice computes it
+again. A field whose `text:display` is `none` shows nothing, and so does
+hidden text saved with `text:is-hidden="true"`; the attribute defaults to
+false. A page number with no one number to show stays empty. In a header or
+footer it is the number of each page the header heads, which a render
+without pages does not have, and the producer saved the number of any one
+page: Word the last. On a slide or a master page Impress and Draw save a
+placeholder in angle brackets, `<number>` in the language of the user
+interface, and show the number of each slide. A ruby shows its base text;
+its annotation is not drawn.
 
 **Every `draw:*` shape is a `frame`.** `create_shape_element` records the kind
 in `m_shape_types`, and `frame_shape_type` reads it back. `draw:rect` and
