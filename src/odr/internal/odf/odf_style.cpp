@@ -371,37 +371,71 @@ Color read_intensity(const Color color, const pugi::xml_attribute intensity) {
   return {scale(color.red), scale(color.green), scale(color.blue), color.alpha};
 }
 
+std::optional<GradientStyle>
+read_gradient_style(const pugi::xml_attribute attribute) {
+  if (!attribute) {
+    return {};
+  }
+  const char *value = attribute.value();
+  if (std::strcmp("linear", value) == 0) {
+    return GradientStyle::linear;
+  }
+  if (std::strcmp("axial", value) == 0) {
+    return GradientStyle::axial;
+  }
+  if (std::strcmp("radial", value) == 0) {
+    return GradientStyle::radial;
+  }
+  if (std::strcmp("ellipsoid", value) == 0) {
+    return GradientStyle::ellipsoid;
+  }
+  if (std::strcmp("square", value) == 0) {
+    return GradientStyle::square;
+  }
+  if (std::strcmp("rectangular", value) == 0) {
+    return GradientStyle::rectangular;
+  }
+  return {};
+}
+
+std::optional<HatchStyle>
+read_hatch_style(const pugi::xml_attribute attribute) {
+  if (!attribute) {
+    return {};
+  }
+  const char *value = attribute.value();
+  if (std::strcmp("single", value) == 0) {
+    return HatchStyle::single;
+  }
+  if (std::strcmp("double", value) == 0) {
+    return HatchStyle::crossed;
+  }
+  if (std::strcmp("triple", value) == 0) {
+    return HatchStyle::triple;
+  }
+  return {};
+}
+
 std::optional<GradientFill> read_gradient(const pugi::xml_node node,
                                           const bool angle_in_tenths) {
   if (!node) {
     return {};
   }
-  static const std::unordered_map<std::string_view, GradientStyle> styles{
-      {"linear", GradientStyle::linear},
-      {"axial", GradientStyle::axial},
-      {"radial", GradientStyle::radial},
-      {"ellipsoid", GradientStyle::ellipsoid},
-      {"square", GradientStyle::square},
-      {"rectangular", GradientStyle::rectangular},
-  };
   GradientFill result;
-  if (const auto it = styles.find(node.attribute("draw:style").value());
-      it != std::end(styles)) {
-    result.style = it->second;
-  }
+  result.style = read_gradient_style(node.attribute("draw:style"))
+                     .value_or(GradientStyle::linear);
+  // what is not stated is zero, as LibreOffice's `XMLGradientStyleImport`
+  // starts from: black, and the center in the corner
   result.start_color = read_intensity(
       read_color(node.attribute("draw:start-color")).value_or(Color(0, 0, 0)),
       node.attribute("draw:start-intensity"));
-  result.end_color = read_intensity(read_color(node.attribute("draw:end-color"))
-                                        .value_or(Color(255, 255, 255)),
-                                    node.attribute("draw:end-intensity"));
+  result.end_color = read_intensity(
+      read_color(node.attribute("draw:end-color")).value_or(Color(0, 0, 0)),
+      node.attribute("draw:end-intensity"));
   result.angle = read_angle(node.attribute("draw:angle"), angle_in_tenths);
-  result.border =
-      std::clamp(read_fraction(node.attribute("draw:border"), 0.0), 0.0, 1.0);
-  result.center_x =
-      std::clamp(read_fraction(node.attribute("draw:cx"), 0.5), 0.0, 1.0);
-  result.center_y =
-      std::clamp(read_fraction(node.attribute("draw:cy"), 0.5), 0.0, 1.0);
+  result.border = read_fraction(node.attribute("draw:border"), 0.0);
+  result.center_x = read_fraction(node.attribute("draw:cx"), 0.0);
+  result.center_y = read_fraction(node.attribute("draw:cy"), 0.0);
   return result;
 }
 
@@ -409,19 +443,17 @@ std::optional<HatchFill> read_hatch(const pugi::xml_node node) {
   if (!node) {
     return {};
   }
-  const std::optional<Measure> distance =
+  // LibreOffice draws a hatch without a positive distance with its lines a
+  // minimum apart, which the renderer sets
+  std::optional<Measure> distance =
       read_measure(node.attribute("draw:distance"));
   if (!distance.has_value() || !(distance->magnitude() > 0) ||
       !std::isfinite(distance->magnitude())) {
-    return {};
+    distance = Measure(0, DynamicUnit("cm"));
   }
   HatchFill result;
-  if (const std::string_view style = node.attribute("draw:style").value();
-      style == "double") {
-    result.style = HatchStyle::crossed;
-  } else if (style == "triple") {
-    result.style = HatchStyle::triple;
-  }
+  result.style = read_hatch_style(node.attribute("draw:style"))
+                     .value_or(HatchStyle::single);
   result.color = read_color(node.attribute("draw:color")).value_or(Color());
   result.distance = *distance;
   // unitless tenths, whoever wrote it (tdf#161327)
@@ -1290,7 +1322,7 @@ pugi::xml_node StyleRegistry::hatch_node(const std::string &name) const {
 
 pugi::xml_attribute StyleRegistry::graphic_attribute(const char *style_name,
                                                      const char *name) const {
-  const auto it = m_index_style.find(style_name);
+  const auto it = m_index_style.find(style_name != nullptr ? style_name : "");
   return graphic_attribute(
       it == std::end(m_index_style) ? pugi::xml_node() : it->second, name);
 }

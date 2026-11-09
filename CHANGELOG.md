@@ -28,22 +28,13 @@ The release run heads these entries with the version and opens a fresh
 
 ### Text documents and presentations
 
-- An odf shape or text box filled with a gradient or a hatch
-  (`draw:fill="gradient"` / `"hatch"`) is painted, with LibreOffice's
-  geometry: an axial gradient has its start color on the axis, a radial one is
-  a circle reaching half the box's diagonal, square and rectangular ones are
-  drawn as the ellipsoid. A unitless `draw:angle` is in degrees, or in tenths
-  of a degree from the producers that wrote it so (ODF below 1.2,
-  OpenOffice.org, LibreOffice before 7), as LibreOffice reads it. A hatch is
-  an svg pattern, over its fill color where `draw:fill-hatch-solid` asks for
-  it. Multi-color and transparency gradients (`loext:gradient-stop`,
-  `draw:opacity-name`) are not read.
-- An odf shape whose styles state a fill color but no `draw:fill` is filled,
-  as LibreOffice fills it: producers leave the solid default unwritten. A
-  frame (`draw:frame`) still fills nothing unless told to.
-- An odf shape with `draw:shadow="visible"` casts its shadow, offset, colored,
-  translucent and blurred as its style states, a frame a box shadow.
-- The dark sheet clears a gradient or hatch as it clears a solid fill.
+- An odf shape or text box filled with a gradient or a hatch is painted as
+  LibreOffice paints it; square and rectangular gradients are drawn as an
+  ellipse. Multi-color and transparency gradients are not read. The dark sheet
+  clears a gradient or hatch as it clears a solid fill.
+- An odf shape whose style states no fill is filled, in LibreOffice's default
+  color where it states none. A text frame still fills only as told.
+- An odf shape or text frame casts the shadow its style states.
 
 ### API, files and saving
 

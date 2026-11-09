@@ -96,12 +96,13 @@ public:
   /// base or the `graphic` default style does; null where none does.
   [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
                                                       const char *name) const;
-  /// The same for the style named @p style_name.
+  /// The same for the style named @p style_name, which may be null.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
+                                                      const char *name) const;
+  /// Whether a unitless gradient angle counts tenths of a degree.
   [[nodiscard]] bool gradient_angles_in_tenths() const {
     return m_gradient_angles_in_tenths;
   }
-  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
-                                                      const char *name) const;
 
   [[nodiscard]] ElementIdentifier master_page(const std::string &name) const;
   [[nodiscard]] ElementIdentifier first_master_page() const;
