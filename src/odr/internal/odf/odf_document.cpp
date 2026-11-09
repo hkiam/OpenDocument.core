@@ -2336,6 +2336,7 @@ public:
     // A shadow belongs to the shape that states it; one stated on a frame
     // around it is cast once, not again by every shape inside.
     result.shadow = get_partial_style(element_id).graphic_style.shadow;
+    place_by_position(element_id, result);
     return result;
   }
 
@@ -2387,6 +2388,46 @@ public:
   }
 
 private:
+  /// LibreOffice places a frame where `style:horizontal-pos` says, and
+  /// `style:wrap` only names the sides the text may flow on. `TextWrap` names
+  /// the side the frame floats to, so a stated position decides it: the
+  /// frame floats to its side where text may flow on the other, and stands
+  /// alone at its position where none may, or where it is centred, which css
+  /// cannot flow around. A wrap its style chain does not state, inherited
+  /// from around the frame, is left as it resolved.
+  void place_by_position(const ElementIdentifier element_id,
+                         GraphicStyle &style) const {
+    if (!style.horizontal_position.has_value() ||
+        !style.text_wrap.has_value() ||
+        (*style.text_wrap != TextWrap::before &&
+         *style.text_wrap != TextWrap::after)) {
+      return;
+    }
+    const std::string_view wrap =
+        m_document->style_registry()
+            .graphic_attribute(style_name_or_empty(element_id), "style:wrap")
+            .value();
+    if (wrap.empty()) {
+      return;
+    }
+    // `biggest` LibreOffice does not read; it is the widest side
+    const bool both =
+        wrap == "dynamic" || wrap == "parallel" || wrap == "biggest";
+    switch (*style.horizontal_position) {
+    case HorizontalAlign::left:
+      style.text_wrap =
+          both || wrap == "right" ? TextWrap::after : TextWrap::none;
+      break;
+    case HorizontalAlign::right:
+      style.text_wrap =
+          both || wrap == "left" ? TextWrap::before : TextWrap::none;
+      break;
+    default:
+      style.text_wrap = TextWrap::none;
+      break;
+    }
+  }
+
   Document *m_document{nullptr};
   mutable std::mutex m_charts_mutex;
   mutable std::unordered_map<ElementIdentifier, std::optional<std::string>>

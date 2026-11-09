@@ -85,6 +85,11 @@ The release run heads these entries with the version and opens a fresh
   other from A4. A text page had no width, so with `text_document_margin` no
   line wrapped, and the pages of a drawing had no box and were drawn over
   each other. A sheet still takes none and prints to the printer's paper.
+- An odt frame with a stated `style:horizontal-pos` sits where it says, as
+  in LibreOffice, whatever its `style:wrap`: it floats to its side where text
+  may flow on the other, and stands alone where none may or where it is
+  centred. A frame wrapped `dynamic` and positioned `left`, as a header's
+  logo, floated right.
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
