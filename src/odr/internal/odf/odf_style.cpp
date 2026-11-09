@@ -318,6 +318,28 @@ PageLayout read_page_layout(const pugi::xml_node node) {
     result.margin.bottom = read_measure(margin_bottom);
   }
 
+  // `svg:height` fixes the height, `fo:min-height` lets it grow; both read as
+  // the least height
+  const auto marginal_height = [](const pugi::xml_node properties) {
+    std::optional<Measure> height =
+        read_measure(properties.attribute("svg:height"));
+    return height.has_value()
+               ? height
+               : read_measure(properties.attribute("fo:min-height"));
+  };
+  if (const pugi::xml_node header =
+          node.child("style:header-style")
+              .child("style:header-footer-properties")) {
+    result.header_min_height = marginal_height(header);
+    result.header_spacing = read_measure(header.attribute("fo:margin-bottom"));
+  }
+  if (const pugi::xml_node footer =
+          node.child("style:footer-style")
+              .child("style:header-footer-properties")) {
+    result.footer_min_height = marginal_height(footer);
+    result.footer_spacing = read_measure(footer.attribute("fo:margin-top"));
+  }
+
   return result;
 }
 
@@ -885,10 +907,12 @@ void StyleRegistry::generate_indices_(const pugi::xml_node node) {
       m_index_hatch[e.attribute("draw:name").value()] = e;
     } else if (name == "style:master-page") {
       std::string master_page_name = e.attribute("style:name").value();
-      m_index_master_page[master_page_name] = e;
-      if (!m_first_master_page.has_value()) {
+      // where nothing names one, LibreOffice's default, "Standard", else
+      // the first
+      if (!m_first_master_page.has_value() || master_page_name == "Standard") {
         m_first_master_page = master_page_name;
       }
+      m_index_master_page[master_page_name] = e;
     }
   }
 }
@@ -1359,6 +1383,11 @@ ElementIdentifier StyleRegistry::first_master_page() const {
   return m_first_master_page_element;
 }
 
+const std::unordered_map<std::string, ElementIdentifier> &
+StyleRegistry::master_pages() const {
+  return m_master_page_elements;
+}
+
 ElementIdentifier
 StyleRegistry::master_page_of_style(const char *style_name) const {
   // Bounded against a style naming itself as its own parent.
@@ -1368,10 +1397,13 @@ StyleRegistry::master_page_of_style(const char *style_name) const {
       break;
     }
     const pugi::xml_node node = style_it->second;
+    // an empty name states that the paragraph opens no page, as LibreOffice
+    // reads it, rather than leaving the question to the parent
     if (const pugi::xml_attribute master_page_name =
-            node.attribute("style:master-page-name");
-        master_page_name && master_page_name.value()[0] != '\0') {
-      return master_page(master_page_name.value());
+            node.attribute("style:master-page-name")) {
+      return master_page_name.value()[0] != '\0'
+                 ? master_page(master_page_name.value())
+                 : null_element_id;
     }
     style_name = node.attribute("style:parent-style-name").value();
   }

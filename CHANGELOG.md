@@ -52,6 +52,25 @@ The release run heads these entries with the version and opens a fresh
 
 - `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
   `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
+- With `text_document_margin`, an odt's page box carries the header and the
+  footer of its master page, its first page's (`style:header-first`) where
+  the box opens a run of that master page and the page has a header or
+  footer. A paragraph naming another master page opens a box of that page's
+  size and margins, as it opens a page in LibreOffice; a later box takes the
+  next master page (`style:next-style-name`), and page one takes the first
+  content's master page, else "Standard". The header's height holds its
+  spacing, as in LibreOffice, and its lists are numbered. A box is a run
+  between breaks, not a page; `style:header-left`, the header's own margins,
+  border and background, and a master page named inside a section, list or
+  table are not read. In an editable view the header and footer carry no
+  editing address.
+
+### API, files and saving
+
+- `MasterPage` has `header()`, `footer()`, `first_header()`, `first_footer()`
+  and `next_master_page()`, `Paragraph` has `master_page()`, and `PageLayout`
+  the `header_min_height`, `header_spacing`, `footer_min_height` and
+  `footer_spacing` the layout states.
 
 ### Fixes
 
@@ -74,6 +93,13 @@ The release run heads these entries with the version and opens a fresh
   named it MAC-CENTRALEUROPE, IBM852 or ISO-8859-11, and the file was
   `UnknownFileType`. Well formed utf-8 beyond ascii is now utf-8 before
   uchardet is asked.
+- The fields of an odt show the text their producer computed: page count,
+  title, sender, chapter, caption numbers, cross-references and the rest of
+  [OpenDocument] 7. Only the date and time showed it. Their text is not
+  editable, as LibreOffice computes it again. A field displayed as `none`,
+  hidden text whose condition holds, and a page number with no one number to
+  show stay empty: in a header or footer, where it is the number of each
+  page, and Impress's `<number>` placeholder.
 
 ## v7.7.0 - 2026-10-31
 

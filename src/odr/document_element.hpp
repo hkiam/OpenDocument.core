@@ -468,6 +468,17 @@ public:
   using ElementBase::ElementBase;
 
   [[nodiscard]] PageLayout page_layout() const;
+  /// The header of a text document's page; an absent element where none.
+  [[nodiscard]] Element header() const;
+  /// The footer of a text document's page; an absent element where none.
+  [[nodiscard]] Element footer() const;
+  /// The header of the first page of a run of this master page, where it
+  /// differs from @ref header; an absent element where it does not.
+  [[nodiscard]] Element first_header() const;
+  /// The same for the footer.
+  [[nodiscard]] Element first_footer() const;
+  /// The master page the following page takes; this one where none is named.
+  [[nodiscard]] MasterPage next_master_page() const;
 };
 
 /// Represents a line break element in a document.
@@ -486,6 +497,9 @@ public:
   using ElementBase::ElementBase;
 
   [[nodiscard]] ParagraphStyle style() const;
+  /// The master page whose page this paragraph opens ([OpenDocument] 19.501);
+  /// an absent one where it names none.
+  [[nodiscard]] MasterPage master_page() const;
   /// States the set fields of @p style on the paragraph and leaves the rest.
   /// Only `text_align` is written; any other field refuses with
   /// `UnsupportedOperation`.

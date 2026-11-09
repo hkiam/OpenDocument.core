@@ -668,22 +668,109 @@ private:
   /// height. `.odr-pages` stacks them.
   static void write_pages(HtmlWriter &out, const WritingState &state,
                           const TextRoot &element) {
-    const PageLayout page_layout = element.page_layout();
+    // The master page of the box being written: the first; then the one a
+    // paragraph names, which opens a page ([OpenDocument] 19.501); else each
+    // one's next. A box is not a page, so a header written once per box is
+    // the closest the boxes come.
+    MasterPage master_page = element.first_master_page();
+    // whether the box opens a run of its master page, which takes the first
+    // page's header and footer where they differ
+    bool opens_run = true;
+    bool first_box = true;
+    Element footer;
+    bool marginals = false;
+
+    // The header and footer repeat per box and edit the styles' part, so
+    // they carry no editing address.
+    WritingState marginal_state = state;
+    marginal_state.set_editable_markup(false);
+    const auto write_marginal = [&](const Element &marginal, const char *clazz,
+                                    std::string style) {
+      HtmlElementOptions options;
+      options.set_class(clazz).set_style(std::move(style));
+      if (state.config().editable) {
+        options.set_attributes(
+            HtmlAttributesVector{{"contenteditable", "false"}});
+      }
+      out.write_element_begin("div", options);
+      translate_children(marginal.children(), marginal_state);
+      out.write_element_end("div");
+    };
 
     const auto begin_page = [&] {
+      // the first box keeps the text root's layout, the size it may have
+      // fallen back to included, and so does a box of a format without master
+      // pages; a later one without a size of its own takes that size and keeps
+      // its margins
+      PageLayout page_layout = element.page_layout();
+      if (!first_box && master_page) {
+        PageLayout own = master_page.page_layout();
+        if (!own.width.has_value()) {
+          own.width = page_layout.width;
+          own.height = page_layout.height;
+        }
+        page_layout = own;
+      }
+      first_box = false;
+      Element header = master_page.header();
+      footer = master_page.footer();
+      // the first page's header is a variant of the header, so a page
+      // without a header has none either
+      if (opens_run) {
+        if (const Element first = master_page.first_header(); first && header) {
+          header = first;
+        }
+        if (const Element first = master_page.first_footer(); first && footer) {
+          footer = first;
+        }
+      }
+      marginals = header || footer;
+      const PageLayout sizes = master_page.page_layout();
       out.write_element_begin(
           "div",
           HtmlElementOptions()
               .set_class("odr-page-outer")
               .set_style(translate_outer_flowing_page_style(page_layout)));
+      if (!marginals) {
+        out.write_element_begin(
+            "div", HtmlElementOptions()
+                       .set_class("odr-page-inner")
+                       .set_style(translate_inner_page_style(page_layout)));
+        return;
+      }
+      // A column, so the footer sits at the foot of the box however short
+      // the body.
       out.write_element_begin(
           "div", HtmlElementOptions()
                      .set_class("odr-page-inner")
-                     .set_style(translate_inner_page_style(page_layout)));
+                     .set_style(translate_inner_page_style(page_layout) +
+                                "display:flex;flex-direction:column;"));
+      if (header) {
+        write_marginal(header, "odr-page-header",
+                       translate_page_marginal_style(sizes.header_min_height,
+                                                     "padding-bottom",
+                                                     sizes.header_spacing));
+      }
+      out.write_element_begin("div", HtmlElementOptions()
+                                         .set_class("odr-page-body")
+                                         .set_style("flex:1 0 auto;"));
     };
     const auto end_page = [&] {
+      if (marginals) {
+        out.write_element_end("div");
+        if (footer) {
+          const PageLayout sizes = master_page.page_layout();
+          write_marginal(footer, "odr-page-footer",
+                         translate_page_marginal_style(sizes.footer_min_height,
+                                                       "padding-top",
+                                                       sizes.footer_spacing));
+        }
+      }
       out.write_element_end("div");
       out.write_element_end("div");
+      const MasterPage next = master_page.next_master_page();
+      opens_run = next != master_page;
+      master_page = next;
     };
 
     begin_page();
@@ -697,8 +784,17 @@ private:
         pending_break = true;
         continue;
       }
-      if ((pending_break || breaks_page_before(child)) && !empty) {
+      const MasterPage named = child.type() == ElementType::paragraph
+                                   ? child.as_paragraph().master_page()
+                                   : MasterPage();
+      if ((pending_break || breaks_page_before(child) || named) && !empty) {
+        const MasterPage previous = master_page;
         end_page();
+        // naming the master page in use again opens a page, not a run
+        if (named) {
+          master_page = named;
+          opens_run = named != previous;
+        }
         begin_page();
         empty = true;
       }

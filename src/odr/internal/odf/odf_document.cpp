@@ -95,6 +95,11 @@ void Document::init_(const pugi::xml_node content_root,
           content_root.attribute("office:version").value(), m_generator));
 
   resolve_list_numbering(m_element_registry, m_style_registry, m_root_element);
+  // a header or footer numbers its lists of its own
+  for (const auto &[_, master_page_id] : m_style_registry.master_pages()) {
+    resolve_list_numbering(m_element_registry, m_style_registry,
+                           master_page_id);
+  }
 
   m_element_adapter = create_element_adapter(*this, m_element_registry);
 }
@@ -618,6 +623,11 @@ public:
     if (element.type == ElementType::sheet_cell) {
       return !m_registry->sheet_cell_element_at(element_id).is_repeated;
     }
+    // a field's text is computed, and LibreOffice computes it again
+    if (element.type == ElementType::group &&
+        is_text_field(element.node.name())) {
+      return false;
+    }
     if (element.parent_id != null_element_id) {
       return element_is_editable(element.parent_id);
     }
@@ -641,27 +651,22 @@ public:
     return std::strcmp(node.name(), "draw:frame") == 0;
   }
 
-  /// Whether laying this out would put a word on the page; a frame is anchored,
-  /// not written.
-  static bool writes_text(const pugi::xml_node node) {
-    for (const pugi::xml_node child : node.children()) {
-      if (child.type() == pugi::node_pcdata &&
-          !std::string_view(child.value()).empty()) {
-        return true;
-      }
-      if (!is_anchored_frame(child) && writes_text(child)) {
-        return true;
-      }
-    }
-    return false;
+  /// Whether @p node declares rather than lays out: the variables, sequences
+  /// and forms a text states ahead of its first paragraph, and its tracked
+  /// changes.
+  static bool is_declaration(const pugi::xml_node node) {
+    const std::string_view name = node.name();
+    return name.ends_with("-decls") || name == "office:forms" ||
+           name == "text:tracked-changes";
   }
 
   [[nodiscard]] ElementIdentifier text_root_first_master_page(
       const ElementIdentifier element_id) const override {
-    // A paragraph may name the master page its page uses (20.283). One page box
-    // is all we lay out, so only a name ahead of every written word counts.
+    // A paragraph may name the master page its page uses (20.283). The first
+    // page is the first content's: an empty paragraph before one that names a
+    // master page keeps the default on page one, as in LibreOffice.
     for (const pugi::xml_node child : get_node(element_id).children()) {
-      if (is_anchored_frame(child)) {
+      if (is_anchored_frame(child) || is_declaration(child)) {
         continue;
       }
       if (const ElementIdentifier master_page_id =
@@ -670,9 +675,7 @@ public:
           master_page_id != null_element_id) {
         return master_page_id;
       }
-      if (writes_text(child)) {
-        break;
-      }
+      break;
     }
     return m_document->style_registry().first_master_page();
   }
@@ -1896,6 +1899,64 @@ public:
       return m_document->style_registry().page_layout(attribute.value());
     }
     return {};
+  }
+
+  [[nodiscard]] ElementIdentifier
+  master_page_header(const ElementIdentifier element_id) const override {
+    return master_page_child(element_id, "style:header");
+  }
+
+  [[nodiscard]] ElementIdentifier
+  master_page_footer(const ElementIdentifier element_id) const override {
+    return master_page_child(element_id, "style:footer");
+  }
+
+  [[nodiscard]] ElementIdentifier
+  master_page_first_header(const ElementIdentifier element_id) const override {
+    const ElementIdentifier header =
+        master_page_child(element_id, "style:header-first");
+    return header != null_element_id
+               ? header
+               : master_page_child(element_id, "loext:header-first");
+  }
+
+  [[nodiscard]] ElementIdentifier
+  master_page_first_footer(const ElementIdentifier element_id) const override {
+    const ElementIdentifier footer =
+        master_page_child(element_id, "style:footer-first");
+    return footer != null_element_id
+               ? footer
+               : master_page_child(element_id, "loext:footer-first");
+  }
+
+  [[nodiscard]] ElementIdentifier
+  paragraph_master_page(const ElementIdentifier element_id) const override {
+    const char *style_name = get_style_name(element_id);
+    return style_name == nullptr
+               ? null_element_id
+               : m_document->style_registry().master_page_of_style(style_name);
+  }
+
+  [[nodiscard]] ElementIdentifier
+  master_page_next(const ElementIdentifier element_id) const override {
+    if (const pugi::xml_attribute next =
+            get_node(element_id).attribute("style:next-style-name")) {
+      return m_document->style_registry().master_page(next.value());
+    }
+    return null_element_id;
+  }
+
+  /// The child of a master page parsed from the node named @p name.
+  [[nodiscard]] ElementIdentifier
+  master_page_child(const ElementIdentifier element_id,
+                    const char *name) const {
+    for (ElementIdentifier child = element_first_child(element_id);
+         child != null_element_id; child = element_next_sibling(child)) {
+      if (std::strcmp(get_node(child).name(), name) == 0) {
+        return child;
+      }
+    }
+    return null_element_id;
   }
 
   [[nodiscard]] TextStyle
