@@ -53,6 +53,13 @@ The release run heads these entries with the version and opens a fresh
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
+- The fields of an odt show the text their producer computed: page count,
+  title, sender, chapter, caption numbers, cross-references and the rest of
+  [OpenDocument] 7. Only the date and time showed it. Their text is not
+  editable, as LibreOffice computes it again. A field displayed as `none`,
+  hidden text whose condition holds, and a page number with no one number to
+  show stay empty: in a header or footer, where it is the number of each
+  page, and Impress's `<number>` placeholder.
 
 ## v7.7.0 - 2026-10-31
 
