@@ -764,6 +764,9 @@ private:
     // Otherwise a leading or doubled break opens an empty sheet.
     bool empty = true;
     bool pending_break = false;
+    // a master page named ahead of any flowing content, after the frames
+    // anchored to the page, keeps their page
+    bool flows = false;
 
     for (const Element child : element.children()) {
       if (child.type() == ElementType::page_break) {
@@ -774,7 +777,8 @@ private:
       const MasterPage named = child.type() == ElementType::paragraph
                                    ? child.as_paragraph().master_page()
                                    : MasterPage();
-      if ((pending_break || breaks_page_before(child) || named) && !empty) {
+      if (((pending_break || breaks_page_before(child)) && !empty) ||
+          (named && flows)) {
         const MasterPage previous = master_page;
         end_page();
         // naming the master page in use again opens a page, not a run
@@ -784,10 +788,12 @@ private:
         }
         begin_page();
         empty = true;
+        flows = false;
       }
       pending_break = breaks_page_after(child);
       translate_element(child, state);
       empty = false;
+      flows = flows || child.type() != ElementType::frame;
     }
 
     end_page();

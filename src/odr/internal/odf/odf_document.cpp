@@ -660,8 +660,9 @@ public:
     // printer's
     return {};
   }
-  static bool is_anchored_frame(const pugi::xml_node node) {
-    return std::strcmp(node.name(), "draw:frame") == 0;
+  /// Whether @p node is a frame or shape anchored to the page, not content.
+  static bool is_anchored_shape(const pugi::xml_node node) {
+    return std::string_view(node.name()).starts_with("draw:");
   }
 
   /// Whether @p node declares rather than lays out: the variables, sequences
@@ -682,7 +683,7 @@ public:
     if (const auto content = std::ranges::find_if(
             children,
             [](const pugi::xml_node child) {
-              return !is_anchored_frame(child) && !is_declaration(child);
+              return !is_anchored_shape(child) && !is_declaration(child);
             });
         content != children.end()) {
       if (const ElementIdentifier master_page_id =

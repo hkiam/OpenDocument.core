@@ -209,6 +209,26 @@ TEST(OdfMasterPage, an_empty_paragraph_keeps_the_default_on_page_one) {
   EXPECT_EQ(count(html, "Wide head"), 1U);
 }
 
+TEST(OdfMasterPage, shapes_anchored_to_the_page_keep_the_named_first_page) {
+  // a letter: its address box and fold marks ahead of the paragraph naming
+  // the first page's master page are on that page, as in LibreOffice
+  const std::string html = html_of(flat_pages(
+      R"(<draw:frame text:anchor-type="page" svg:x="2cm" svg:y="4cm")"
+      R"( svg:width="8cm" svg:height="4cm"><draw:text-box>)"
+      R"(<text:p>Address</text:p></draw:text-box></draw:frame>)"
+      R"(<draw:line text:anchor-type="page" svg:x1="0cm" svg:y1="10cm")"
+      R"( svg:x2="0.5cm" svg:y2="10cm"/>)"
+      R"(<text:p text:style-name="Opening">Dear reader</text:p>)",
+      opening("Opening", "First"),
+      R"(<style:master-page style:name="Standard"><style:header>)"
+      R"(<text:p>Standard head</text:p></style:header></style:master-page>)"
+      R"(<style:master-page style:name="First"><style:header>)"
+      R"(<text:p>First head</text:p></style:header></style:master-page>)"));
+  EXPECT_EQ(count(html, "First head"), 1U);
+  EXPECT_EQ(count(html, "Standard head"), 0U);
+  EXPECT_EQ(count(html, R"(class="odr-page-outer")"), 1U);
+}
+
 TEST(OdfMasterPage, standard_is_the_default_master_page) {
   const std::string html = html_of(flat_pages(
       R"(<text:p>Body</text:p>)", "",
