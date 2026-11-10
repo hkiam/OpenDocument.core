@@ -76,6 +76,9 @@ The release run heads these entries with the version and opens a fresh
   hidden, and a page number in a header, footer or Impress placeholder stay
   empty.
 - An odt's ruby shows its base text; it showed nothing.
+- A slide no longer draws its master page's placeholders, such as "Click to
+  edit Master title style" over its own title. `MasterPage::children` leaves
+  them out.
 
 ## v7.7.0 - 2026-10-31
 
