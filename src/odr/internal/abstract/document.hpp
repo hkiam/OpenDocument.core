@@ -512,6 +512,12 @@ public:
       [[maybe_unused]] const ElementIdentifier element_id) const {
     return null_element_id;
   }
+
+  /// A heading's number in a numbered outline, "1.2"; else empty.
+  [[nodiscard]] virtual std::string
+  paragraph_marker([[maybe_unused]] const ElementIdentifier element_id) const {
+    return {};
+  }
   /// Writes `text_align` of @p style, which is set, on the paragraph.
   virtual void
   paragraph_set_style([[maybe_unused]] const ElementIdentifier element_id,

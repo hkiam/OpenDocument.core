@@ -277,9 +277,13 @@ void html::translate_page_break(const Element & /*element*/,
 }
 
 void html::translate_paragraph(const Element &element,
-                               const WritingState &state,
-                               const std::string &marker) {
+                               const WritingState &state, std::string marker) {
   const Paragraph paragraph = element.as_paragraph();
+  // a heading's number has no list indent to hang into
+  const bool heading = marker.empty();
+  if (heading) {
+    marker = paragraph.marker();
+  }
 
   state.out().write_element_begin(
       "x-p",
@@ -295,10 +299,11 @@ void html::translate_paragraph(const Element &element,
                      state.styles()));
   if (!marker.empty()) {
     state.out().write_element_begin(
-        "x-s", HtmlElementOptions()
-                   .set_inline(true)
-                   .set_class("odr-list-marker")
-                   .set_style(translate_text_style(paragraph.text_style())));
+        "x-s",
+        HtmlElementOptions()
+            .set_inline(true)
+            .set_class(heading ? "odr-heading-marker" : "odr-list-marker")
+            .set_style(translate_text_style(paragraph.text_style())));
     // The tab separates label from text once copied.
     state.out().out() << escape_text(marker) << "&#9;";
     state.out().write_element_end("x-s");

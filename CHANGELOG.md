@@ -51,6 +51,21 @@ The release run heads these entries with the version and opens a fresh
   and `next_master_page()`, `Paragraph` has `master_page()`, and `PageLayout`
   the `header_min_height`, `header_spacing`, `footer_min_height` and
   `footer_spacing` the layout states.
+- The headings of an odt are numbered after its `text:outline-style`, "1",
+  "1.1", "1.2.1", as Word and LibreOffice number chapters, up to the ten
+  levels LibreOffice has. The HTML writes the number before the heading.
+- Lists and the outline of an odt count as LibreOffice does: a list item that
+  holds no paragraph, only a nested list, is not counted; a level an item
+  skips opens at its start; and a level without a number format is left out of
+  the label with its period. A form saved by Word numbered its fields "2.1.",
+  "3.1." where Word and LibreOffice show "1.1.", "1.2.". A list may name the
+  outline as its style.
+
+### API, files and saving
+
+- The new `Paragraph::marker` returns a heading's number in a numbered
+  outline, empty for any other paragraph, in Python, Java and Objective-C
+  too.
 
 ### Fixes
 
@@ -79,6 +94,11 @@ The release run heads these entries with the version and opens a fresh
 - A slide no longer draws its master page's placeholders, such as "Click to
   edit Master title style" over its own title. `MasterPage::children` leaves
   them out.
+- A list bullet set in Symbol, Wingdings or Zapf Dingbats shows as its
+  Unicode character in an odt too (Symbol's U+F0B7 as •, Wingdings' "§" as
+  ▪), not as a box or a letter. In a docx, the bullet's font now tells the
+  fonts apart, so Symbol's dot is a dot on every level. Any other private-use
+  bullet, such as one of OpenSymbol, takes the level's default.
 
 ## v7.7.0 - 2026-10-31
 

@@ -37,6 +37,15 @@ formats are in `common/list_numbering.*`, shared with ODF. The recursive walk
 passes its lambda to itself, because NDK 28.1's clang crashes on a recursive
 `this auto self` lambda.
 
+**Symbol-font bullets map to Unicode.** Word sets its bullets in Symbol,
+Wingdings or Zapf Dingbats, at a private-use code point U+F020 to U+F0FF or
+at the font's byte, and both show wrong in any other font. As LibreOffice's
+`ConvertChar::RecodeChar`, `resolve_bullet` (`common/list_numbering.*`, shared
+with ODF) maps the byte by the font's own table, because a byte means another
+character in each: 0xA7 is a club in Symbol and a small square in Wingdings.
+A byte the table lacks, a private-use character in any other font, and
+malformed text take the level's default.
+
 **Page layout comes from the first `w:sectPr` in document order.** The model
 carries one `PageLayout` per text root. Word carries one per section, and
 `w:body/w:sectPr` describes the last section. The first one in document order

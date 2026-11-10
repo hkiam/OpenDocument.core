@@ -1983,6 +1983,11 @@ public:
                ? null_element_id
                : m_document->style_registry().master_page_of_style(style_name);
   }
+
+  [[nodiscard]] std::string
+  paragraph_marker(const ElementIdentifier element_id) const override {
+    return m_registry->list_marker(element_id).text;
+  }
   void paragraph_set_style(const ElementIdentifier element_id,
                            const ParagraphStyle &style) const override {
     pugi::xml_node node = get_node(element_id);

@@ -95,6 +95,8 @@ public:
   [[nodiscard]] pugi::xml_node font_face_node(const std::string &name) const;
 
   [[nodiscard]] pugi::xml_node list_style_node(const std::string &name) const;
+  /// The document's `text:outline-style`, which numbers its headings.
+  [[nodiscard]] pugi::xml_node outline_style_node() const;
 
   /// The `draw:gradient` named @p name, null where there is none.
   [[nodiscard]] pugi::xml_node gradient_node(const std::string &name) const;
