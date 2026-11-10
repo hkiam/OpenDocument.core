@@ -304,7 +304,8 @@ TEST(html_document_style, fill_image_turns_the_third_hatch_back_by_45) {
 
 TEST(html_document_style, fill_image_holds_a_hatch_to_two_pixels) {
   GraphicStyle style;
-  style.fill_hatch = HatchFill{.distance = Measure("0.00001cm")};
+  style.fill_hatch =
+      HatchFill{.color = Color(0, 0, 0), .distance = Measure("0.00001cm")};
   EXPECT_NE(ihtml::translate_fill_image(style).find("width=%222px%22"),
             std::string::npos);
 }
