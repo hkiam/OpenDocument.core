@@ -40,6 +40,17 @@ The release run heads these entries with the version and opens a fresh
 
 - `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
   `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
+- With `text_document_margin`, an odt's page box shows the header and footer
+  of its master page, the first page's where it differs; a paragraph naming a
+  master page opens a box of that page. `style:header-left` and the headers'
+  own margins, border and background are not read.
+
+### API, files and saving
+
+- `MasterPage` has `header()`, `footer()`, `first_header()`, `first_footer()`
+  and `next_master_page()`, `Paragraph` has `master_page()`, and `PageLayout`
+  the `header_min_height`, `header_spacing`, `footer_min_height` and
+  `footer_spacing` the layout states.
 
 ### Fixes
 
@@ -57,6 +68,11 @@ The release run heads these entries with the version and opens a fresh
   example a flat odt with a single soft hyphen or umlaut, opens. uchardet
   named it MAC-CENTRALEUROPE, IBM852 or ISO-8859-11, and the file was
   `UnknownFileType`.
+- The fields of an odt show the text their producer saved, read-only; only
+  date and time did. A field displayed as `none`, hidden text saved as
+  hidden, and a page number in a header, footer or Impress placeholder stay
+  empty.
+- An odt's ruby shows its base text; it showed nothing.
 
 ## v7.7.0 - 2026-10-31
 

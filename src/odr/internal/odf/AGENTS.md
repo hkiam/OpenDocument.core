@@ -29,9 +29,21 @@ StoredId>` with the payload tables `m_texts`, `m_tables`, `m_sheets`,
 **Parsing is a name-keyed dispatch table.** `odf_parser.cpp` maps an XML tag to
 a `TreeParser`. An unknown tag is skipped, and the recursion continues into its
 children. Many tags collapse onto a generic type: `text:h` is a paragraph,
-`text:section`, `text:table-of-content` and date fields are a `group`,
-`draw:g` is a frame. A container gets its own children parser
+`text:section`, `text:table-of-content` and the fields (`is_text_field`) are a
+`group`, `draw:g` is a frame. A container gets its own children parser
 (`parse_presentation_children` walks only `draw:page`).
+
+**A field shows the text its producer saved.** That is what LibreOffice shows
+until it updates the field, and it is read-only, as LibreOffice computes it
+again. A field whose `text:display` is `none` shows nothing, and so does
+hidden text saved with `text:is-hidden="true"`; the attribute defaults to
+false. A page number with no one number to show stays empty. In a header or
+footer it is the number of each page the header heads, which a render
+without pages does not have, and the producer saved the number of any one
+page: Word the last. On a slide or a master page Impress and Draw save a
+placeholder in angle brackets, `<number>` in the language of the user
+interface, and show the number of each slide. A ruby shows its base text;
+its annotation is not drawn.
 
 **Every `draw:*` shape is a `frame`.** `create_shape_element` records the kind
 in `m_shape_types`, and `frame_shape_type` reads it back. `draw:rect` and
@@ -139,6 +151,21 @@ LibreOffice and its derivatives, Collabora Office among them, name
 `fill_hatch` a `draw:hatch` (16.40.6), whose `double` style is `crossed`.
 `shadow` is set where `draw:shadow` is `visible`; its color's alpha is
 `draw:shadow-opacity`, its blur `loext:shadow-blur`.
+
+**A page box carries the header and footer of its master page.** With
+`text_document_margin` a box is a run between breaks, not a page, so a header
+written once per box is the closest the boxes come. The first box takes the
+first content's master page; a paragraph naming one opens a box of it, as it
+opens a page in LibreOffice (20.283); any other box takes the previous one's
+`style:next-style-name`. A box opening a run of its master page takes the
+first page's header and footer where they differ. They are variants of the
+header and footer, so a page with none has no first one either, and naming
+the master page in use again opens a page, not a run. A later box whose
+layout states no width or height takes the first box's and keeps its own
+margins. LibreOffice's header height holds the spacing to the body
+(`fo:min-height` is `PROP_HeaderHeight`), so the box is `border-box`. The
+header and footer repeat per box and belong to `styles.xml`, so they carry no
+editing address.
 
 **A flat document is the same `Document`, minus the package.** Its
 `office:document` root carries what `content.xml` and `styles.xml` carry
