@@ -289,6 +289,8 @@ struct Shadow final {
 /// Represents a style for graphics.
 struct GraphicStyle final {
   std::optional<Measure> stroke_width;
+  /// An alpha of 0 is no stroke (`draw:stroke="none"`), as it is no fill for
+  /// @ref fill_color: the state and the color cascade independently.
   std::optional<Color> stroke_color;
   /// The solid fill, also behind a solid hatch. Its alpha is 0 or 255, whether
   /// it paints, not an opacity.
