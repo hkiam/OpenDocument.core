@@ -162,16 +162,16 @@ TEST(ListCounter, a_started_level_counts_on_from_its_start) {
 // U+F0B7, U+F0A7 and so on: the private-use points Word writes a symbol
 // font's byte at
 namespace {
-const std::string symbol_dot = "\xef\x82\xb7";   // Symbol 0xB7
-const std::string symbol_minus = "\xef\x80\xad"; // Symbol 0x2D
-const std::string square = "\xef\x82\xa7";       // 0xA7
-const std::string arrow = "\xef\x83\x98";        // Wingdings 0xD8
-const std::string check = "\xef\x83\xbc";        // Wingdings 0xFC
-const std::string diamond = "\xef\x81\xb5";      // Wingdings 0x75
-const std::string clover = "\xef\x81\xb6";       // Wingdings 0x76
-const std::string white_square = "\xef\x82\xa8"; // Wingdings 0xA8
-const std::string unmapped = "\xef\x80\xa1";     // 0x21
-const std::string private_use = "\xee\x80\x80";  // U+E000
+constexpr const char *symbol_dot = "\xef\x82\xb7";   // Symbol 0xB7
+constexpr const char *symbol_minus = "\xef\x80\xad"; // Symbol 0x2D
+constexpr const char *square = "\xef\x82\xa7";       // 0xA7
+constexpr const char *arrow = "\xef\x83\x98";        // Wingdings 0xD8
+constexpr const char *check = "\xef\x83\xbc";        // Wingdings 0xFC
+constexpr const char *diamond = "\xef\x81\xb5";      // Wingdings 0x75
+constexpr const char *clover = "\xef\x81\xb6";       // Wingdings 0x76
+constexpr const char *white_square = "\xef\x82\xa8"; // Wingdings 0xA8
+constexpr const char *unmapped = "\xef\x80\xa1";     // 0x21
+constexpr const char *private_use = "\xee\x80\x80";  // U+E000
 } // namespace
 
 TEST(ResolveBullet, a_symbol_font_bullet_becomes_its_unicode_character) {
