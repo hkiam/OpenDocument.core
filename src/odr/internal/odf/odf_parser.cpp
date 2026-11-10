@@ -378,7 +378,8 @@ bool is_hidden_text(const pugi::xml_node node) {
 /// A field as the text its producer saved, or nothing where it shows none.
 std::tuple<ElementIdentifier, pugi::xml_node>
 parse_field(ElementRegistry &registry, const pugi::xml_node node) {
-  if (std::string_view(node.attribute("text:display").value()) == "none" ||
+  if (!node.first_child() ||
+      std::string_view(node.attribute("text:display").value()) == "none" ||
       is_unnumbered_page_number(node) || is_hidden_text(node)) {
     return {null_element_id, pugi::xml_node()};
   }

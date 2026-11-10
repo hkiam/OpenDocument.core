@@ -77,6 +77,19 @@ TEST(OdfField, a_field_displayed_as_none_shows_nothing) {
             "5");
 }
 
+TEST(OdfField, a_field_without_text_leaves_its_paragraph_empty) {
+  // so the paragraph keeps the height of an empty line
+  const Document document =
+      open(File::from_memory(flat_document(
+               "application/vnd.oasis.opendocument.text",
+               R"(<office:text><text:p><text:hidden-text)"
+               R"( text:condition="ooow:1==1" text:string-value="x"/>)"
+               R"(</text:p></office:text>)")))
+          .as_document_file()
+          .document();
+  EXPECT_FALSE(document.root_element().first_child().first_child());
+}
+
 TEST(OdfField, hidden_text_shows_unless_saved_as_hidden) {
   EXPECT_EQ(text_of(R"(<text:p>shown<text:hidden-text text:condition="ooow:1")"
                     R"( text:string-value="no" text:is-hidden="true">no)"
