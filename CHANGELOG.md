@@ -99,6 +99,9 @@ The release run heads these entries with the version and opens a fresh
   ▪), not as a box or a letter. In a docx, the bullet's font now tells the
   fonts apart, so Symbol's dot is a dot on every level. Any other private-use
   bullet, such as one of OpenSymbol, takes the level's default.
+- An ods cell saved with a value but without its text, as LibreOffice 4.2
+  saved a row of sums, shows the value in its data style and counts as
+  content of the sheet. It was blank. `SheetCell::value` states that text.
 
 ## v7.7.0 - 2026-10-31
 

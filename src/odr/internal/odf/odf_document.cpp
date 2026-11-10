@@ -303,6 +303,31 @@ bool gradient_angles_in_tenths(const std::string_view office_version,
          major < 7;
 }
 
+/// Whether @p node holds any text, a space or a tab, outside the comments and
+/// the drawings anchored in it.
+bool states_text(const pugi::xml_node node) {
+  return std::ranges::any_of(node.children(), [](const pugi::xml_node child) {
+    if (child.type() == pugi::node_pcdata || child.type() == pugi::node_cdata) {
+      return *child.value() != '\0';
+    }
+    const std::string_view name = child.name();
+    if (name == "text:s" || name == "text:tab") {
+      return true;
+    }
+    return name != "office:annotation" && !name.starts_with("draw:") &&
+           states_text(child);
+  });
+}
+
+/// Whether @p cell states a value, which LibreOffice shows whether or not the
+/// file cached its text.
+bool states_value(const pugi::xml_node cell) {
+  return !cell.attribute("office:value").empty() ||
+         !cell.attribute("office:date-value").empty() ||
+         !cell.attribute("office:time-value").empty() ||
+         !cell.attribute("office:boolean-value").empty();
+}
+
 /// Boolean `&` uses words from LibreOffice 27.2 (commit 5663da9fa7).
 /// Unknown for other generators or 27.2 alpha builds.
 std::optional<bool> boolean_word_of(std::string_view generator) {
@@ -752,8 +777,8 @@ public:
     for_each_cell_run(element_id, [&](const ElementRegistry::Sheet::Cell &cell,
                                       const std::uint32_t row,
                                       const TableDimensions &repeated) {
-      if (!cell.node.first_child() || row >= limit.rows ||
-          cell.begin >= limit.columns) {
+      if ((!cell.node.first_child() && !states_value(cell.node)) ||
+          row >= limit.rows || cell.begin >= limit.columns) {
         return;
       }
       const std::uint32_t colspan = std::max(
@@ -1877,7 +1902,43 @@ public:
     if (const pugi::xml_attribute formula = node.attribute("table:formula")) {
       result = result.with_formula(formula.value());
     }
+    if (const std::optional<std::string> text =
+            uncached_text(element_id, result);
+        text.has_value()) {
+      result = result.with_text(*text);
+    }
     return result;
+  }
+
+  /// What a value cell without text shows: its value in its data style or
+  /// `General`, a boolean as `write_result` does. None for a positional cell.
+  [[nodiscard]] std::optional<std::string>
+  uncached_text(const ElementIdentifier element_id,
+                const CellValue &value) const {
+    if (!value.has_number() ||
+        (value.type() != ValueType::float_number &&
+         value.type() != ValueType::date && value.type() != ValueType::time &&
+         value.type() != ValueType::boolean)) {
+      return std::nullopt;
+    }
+    if (positional_id::holds(element_id) || states_text(get_node(element_id))) {
+      return std::nullopt;
+    }
+    if (value.type() == ValueType::boolean) {
+      return value.number() != 0 ? "TRUE" : "FALSE";
+    }
+    if (std::optional<std::string> shown =
+            shown_value(element_parent(element_id), element_id,
+                        sheet_cell_position(element_id), value);
+        shown.has_value()) {
+      return shown;
+    }
+    if (value.type() != ValueType::float_number) {
+      return std::nullopt;
+    }
+    return number_format::Format().format(
+        value.number(), number_format::Epoch::from_1900,
+        number_format::symbols_of(m_document->locale().value_or("")));
   }
 
   [[nodiscard]] PageLayout
