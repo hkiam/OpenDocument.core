@@ -655,9 +655,9 @@ MasterPage Paragraph::master_page() const {
   if (!exists_()) {
     return {};
   }
-  const ElementIdentifier id = m_adapter2->paragraph_master_page(m_identifier);
-  return id == null_element_id ? MasterPage()
-                               : Element(m_adapter, id).as_master_page();
+  const ElementIdentifier master_page_id =
+      m_adapter2->paragraph_master_page(m_identifier);
+  return Element(m_adapter, master_page_id).as_master_page();
 }
 
 void Paragraph::set_style(const ParagraphStyle &style) const {

@@ -24,11 +24,13 @@ std::string flat_text(const std::string &body, const std::string &styles) {
          "</office:text></office:body></office:document>";
 }
 
+/// Level 2 of the outline as Word writes it, "1.1".
+constexpr const char *default_level_two =
+    R"(style:num-format="1" text:display-levels="2")";
+
 /// An outline numbering levels 1 to 3 as Word writes it: "1", "1.1",
 /// "1.1.1", with @p level_two stating level 2.
-std::string
-outline_style(const std::string &level_two =
-                  R"(style:num-format="1" text:display-levels="2")") {
+std::string outline_style(const std::string &level_two = default_level_two) {
   return R"(<office:styles><text:outline-style style:name="Outline">)"
          R"(<text:outline-level-style text:level="1" style:num-format="1"/>)"
          R"(<text:outline-level-style text:level="2" )" +
@@ -38,15 +40,13 @@ outline_style(const std::string &level_two =
          R"(</text:outline-style></office:styles>)";
 }
 
-std::string
-numbered_outline(const std::string &body,
-                 const std::string &level_two =
-                     R"(style:num-format="1" text:display-levels="2")") {
+std::string numbered_outline(const std::string &body,
+                             const std::string &level_two = default_level_two) {
   return flat_text(body, outline_style(level_two));
 }
 
 /// A list style numbering levels 1 and 2 "1." and "1.1.".
-const char *numbered_list_style =
+constexpr const char *numbered_list_style =
     R"(<office:automatic-styles><text:list-style style:name="L1">)"
     R"(<text:list-level-style-number text:level="1" style:num-format="1")"
     R"( style:num-suffix="."/>)"
@@ -87,7 +87,7 @@ std::vector<std::string> item_markers(const std::string &source) {
 }
 
 std::string render(const std::string &source) {
-  HtmlConfig config(
+  const HtmlConfig config(
       (std::filesystem::current_path() / "odf_numbering").string());
   std::ostringstream out;
   html::translate(open(File::from_memory(source)), config)
@@ -241,4 +241,22 @@ TEST(OdfList, a_table_page_break_or_cached_label_before_the_paragraph_count) {
                      item("<text:number>4.</text:number>" + paragraph("d"))),
                 numbered_list_style)),
             (std::vector<std::string>{"1.", "2.", "3.", "4."}));
+}
+
+TEST(OdfList, a_symbol_font_bullet_is_drawn_as_its_character) {
+  // as Word writes a bullet list into an odt
+  const std::string html = render(flat_text(
+      list(item(paragraph("one"))),
+      R"(<office:font-face-decls><style:font-face style:name="Symbol")"
+      R"( svg:font-family="Symbol"/></office:font-face-decls>)"
+      R"(<office:automatic-styles><text:list-style style:name="L1">)"
+      R"(<text:list-level-style-bullet text:level="1")"
+      R"( text:bullet-char=")"
+      "\xef\x82\xb7"
+      R"("><style:text-properties)"
+      R"( style:font-name="Symbol"/></text:list-level-style-bullet>)"
+      R"(</text:list-style></office:automatic-styles>)"));
+
+  EXPECT_EQ(count(html, "\xef\x82\xb7"), 0U);
+  EXPECT_GE(count(html, "•"), 1U);
 }

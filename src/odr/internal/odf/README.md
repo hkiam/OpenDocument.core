@@ -82,7 +82,7 @@ variants. Design and open work are in [`AGENTS.md`](AGENTS.md). Relies on
     - [ ] `draw:handle` (the interactive control points)
     - [ ] `F` / `S`: one subpath painted differently from the rest
   - [x] graphic style: stroke width/color, fill color, vertical align, text wrap
-  - [x] gradient fills (`draw:gradient`; square and rectangular drawn as the
+  - [x] gradient fills (`draw:gradient`; square and rectangular drawn as an
     ellipse, an ellipsoid not turned by `draw:angle`) and hatch fills
     (`draw:hatch`, with `draw:fill-hatch-solid`)
   - [ ] `draw:gradient-step-count`, multi-color gradients
@@ -105,8 +105,10 @@ variants. Design and open work are in [`AGENTS.md`](AGENTS.md). Relies on
 - [x] bookmarks
 - [x] sections (rendered as generic groups)
 - [x] fields of [OpenDocument] 7: the text the producer saved, read-only;
-  `text:display="none"`, hidden text and a page number with no one number
-  to show (in a header or footer, or Impress's `<number>`) show nothing
+  `text:display="none"`, hidden text saved as hidden and a page number with
+  no one number to show (in a header or footer, or Impress's `<number>`)
+  show nothing
+- [x] ruby (the base text; the annotation is not drawn)
 - [x] table of contents / indices (rendered as generic groups)
 - [x] manual page breaks (`fo:break-before`, `fo:break-after`)
 - [x] headers and footers (`style:header`, `style:footer`, `-first`; not

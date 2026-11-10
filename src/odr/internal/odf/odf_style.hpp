@@ -68,11 +68,8 @@ private:
 class StyleRegistry final {
 public:
   StyleRegistry();
-  /// @p gradient_angles_in_tenths: the producer wrote a unitless gradient
-  /// `draw:angle` in tenths of a degree.
   StyleRegistry(Document &document, pugi::xml_node content_root,
-                pugi::xml_node styles_root,
-                bool gradient_angles_in_tenths = false);
+                pugi::xml_node styles_root, bool gradient_angles_in_tenths);
 
   [[nodiscard]] Style *style(const char *name) const;
   /// The data style (`number:number-style` and its kin) named @p name, null
@@ -84,6 +81,14 @@ public:
   /// The `style:default-style` of @p family, null where there is none.
   [[nodiscard]] pugi::xml_node
   default_style_node(const std::string &family) const;
+
+  /// The graphic property @p name as @p style states it, else as its nearest
+  /// base or the `graphic` default style does; null where none does.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
+                                                      const char *name) const;
+  /// The same for the style named @p style_name, which may be null.
+  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
+                                                      const char *name) const;
 
   [[nodiscard]] PageLayout page_layout(const std::string &name) const;
 
@@ -97,15 +102,7 @@ public:
   [[nodiscard]] pugi::xml_node gradient_node(const std::string &name) const;
   /// The `draw:hatch` named @p name, null where there is none.
   [[nodiscard]] pugi::xml_node hatch_node(const std::string &name) const;
-  /// The graphic property @p name as @p style states it, else as its nearest
-  /// base or the `graphic` default style does; null where none does.
-  [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
-                                                      const char *name) const;
-  /// The same for the style named @p style_name.
-  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
-                                                      const char *name) const;
-  /// Whether a gradient angle without a unit counts tenths of a degree, as
-  /// the document's producer wrote it.
+  /// Whether a unitless gradient angle counts tenths of a degree.
   [[nodiscard]] bool gradient_angles_in_tenths() const {
     return m_gradient_angles_in_tenths;
   }

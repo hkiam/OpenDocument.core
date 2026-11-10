@@ -275,13 +275,8 @@ void remove_value_attributes(pugi::xml_node node) {
   }
 }
 
-/// Whether a gradient angle without a unit counts tenths of a degree, as
-/// LibreOffice reads it (`xmloff/source/style/GradientStyle.cxx`); else it
-/// counts degrees ([OpenDocument] 18.3.1). Always below ODF 1.2,
-/// which a missing `office:version` is; at exactly 1.2 where OpenOffice.org,
-/// StarOffice, Apache OpenOffice or a LibreOffice before 7 wrote it; else
-/// degrees. LibreOffice and its derivatives, Collabora Office among them,
-/// name `LibreOffice_project/` in the generator after their version.
+/// Whether a unitless gradient angle counts tenths of a degree, as LibreOffice
+/// reads it (`xmloff/source/style/GradientStyle.cxx`); see AGENTS.md.
 bool gradient_angles_in_tenths(const std::string_view office_version,
                                const std::string_view generator) {
   const std::optional<double> version = util::number::parse(office_version);
@@ -306,6 +301,31 @@ bool gradient_angles_in_tenths(const std::string_view office_version,
                          generator.data() + generator.size(), major)
                  .ec == std::errc{} &&
          major < 7;
+}
+
+/// Whether @p node holds any text, a space or a tab, outside the comments and
+/// the drawings anchored in it.
+bool states_text(const pugi::xml_node node) {
+  return std::ranges::any_of(node.children(), [](const pugi::xml_node child) {
+    if (child.type() == pugi::node_pcdata || child.type() == pugi::node_cdata) {
+      return *child.value() != '\0';
+    }
+    const std::string_view name = child.name();
+    if (name == "text:s" || name == "text:tab") {
+      return true;
+    }
+    return name != "office:annotation" && !name.starts_with("draw:") &&
+           states_text(child);
+  });
+}
+
+/// Whether @p cell states a value, which LibreOffice shows whether or not the
+/// file cached its text.
+bool states_value(const pugi::xml_node cell) {
+  return !cell.attribute("office:value").empty() ||
+         !cell.attribute("office:date-value").empty() ||
+         !cell.attribute("office:time-value").empty() ||
+         !cell.attribute("office:boolean-value").empty();
 }
 
 /// Boolean `&` uses words from LibreOffice 27.2 (commit 5663da9fa7).
@@ -588,19 +608,14 @@ using AdapterBase = internal::RegistryElementAdapter<
     abstract::TableColumnAdapter, abstract::TableRowAdapter,
     abstract::TableCellAdapter, abstract::FrameAdapter, abstract::ImageAdapter>;
 
-/// LibreOffice's fill of a shape that states no colour.
+/// LibreOffice's fill of a shape that states no color (`XFillColorItem`).
 Color default_shape_fill_color() { return {0x72, 0x9f, 0xcf}; }
 
-/// The paper a layout stating no size takes: the application's, which
-/// LibreOffice takes from the locale (Letter in the US). With no locale to
-/// ask, A4 portrait, which LibreOffice keeps for a landscape layout too.
+/// The paper of a layout stating no size: A4 portrait.
 constexpr double default_paper_width_cm = 21;
 constexpr double default_paper_height_cm = 29.7;
 
-/// @p layout with the default paper's width and height where it states none,
-/// each on its own as LibreOffice's `XMLPageMasterContext` completes them; so
-/// a text page has a width to set its lines in and a drawing page a box to
-/// hold its shapes. A sheet keeps none, and prints to the printer's paper.
+/// @p layout with the default paper's width and height where it states none.
 PageLayout with_default_paper(PageLayout layout) {
   if (!layout.width.has_value()) {
     layout.width = Measure(default_paper_width_cm, DynamicUnit("cm"));
@@ -642,11 +657,9 @@ public:
       return with_default_paper(master_page_page_layout(master_page_id));
     }
     // no master page at all: the text flows on no paper, and prints to the
-    // printer's, as `html.a_text_page_with_a_frame_on_the_page_prints_whole`
-    // asks
+    // printer's
     return {};
   }
-
   static bool is_anchored_frame(const pugi::xml_node node) {
     return std::strcmp(node.name(), "draw:frame") == 0;
   }
@@ -665,17 +678,19 @@ public:
     // A paragraph may name the master page its page uses (20.283). The first
     // page is the first content's: an empty paragraph before one that names a
     // master page keeps the default on page one, as in LibreOffice.
-    for (const pugi::xml_node child : get_node(element_id).children()) {
-      if (is_anchored_frame(child) || is_declaration(child)) {
-        continue;
-      }
+    const auto children = get_node(element_id).children();
+    if (const auto content = std::ranges::find_if(
+            children,
+            [](const pugi::xml_node child) {
+              return !is_anchored_frame(child) && !is_declaration(child);
+            });
+        content != children.end()) {
       if (const ElementIdentifier master_page_id =
               m_document->style_registry().master_page_of_style(
-                  child.attribute("text:style-name").value());
+                  content->attribute("text:style-name").value());
           master_page_id != null_element_id) {
         return master_page_id;
       }
-      break;
     }
     return m_document->style_registry().first_master_page();
   }
@@ -1895,13 +1910,8 @@ public:
     return result;
   }
 
-  /// What a number, date, time or boolean cell shows where the file cached
-  /// no text for it: its value in its data style, else as `General`, and a
-  /// boolean as `write_result` writes it. LibreOffice formats the value when
-  /// it loads, so a row of sums saved without their text shows the sums
-  /// there. Nothing for a cell with text, and nothing for a positional cell:
-  /// the file states none, and a repeated cell's copies are positional, so
-  /// they stay empty.
+  /// What a value cell without text shows: its value in its data style or
+  /// `General`, a boolean as `write_result` does. None for a positional cell.
   [[nodiscard]] std::optional<std::string>
   uncached_text(const ElementIdentifier element_id,
                 const CellValue &value) const {
@@ -1931,37 +1941,6 @@ public:
         number_format::symbols_of(m_document->locale().value_or("")));
   }
 
-  /// Whether @p node holds any text, a space or a tab, outside the comments
-  /// it carries.
-  [[nodiscard]] static bool states_text(const pugi::xml_node node) {
-    for (const pugi::xml_node child : node.children()) {
-      if (child.type() == pugi::node_pcdata ||
-          child.type() == pugi::node_cdata) {
-        if (*child.value() != '\0') {
-          return true;
-        }
-        continue;
-      }
-      const std::string_view name = child.name();
-      if (name == "text:s" || name == "text:tab") {
-        return true;
-      }
-      if (name != "office:annotation" && states_text(child)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /// Whether @p cell states a value, which LibreOffice shows whether or not
-  /// the file cached its text.
-  [[nodiscard]] static bool states_value(const pugi::xml_node cell) {
-    return cell.attribute("office:value") ||
-           cell.attribute("office:date-value") ||
-           cell.attribute("office:time-value") ||
-           cell.attribute("office:boolean-value");
-  }
-
   [[nodiscard]] PageLayout
   master_page_page_layout(const ElementIdentifier element_id) const override {
     const pugi::xml_node node = get_node(element_id);
@@ -1985,28 +1964,22 @@ public:
 
   [[nodiscard]] ElementIdentifier
   master_page_first_header(const ElementIdentifier element_id) const override {
-    const ElementIdentifier header =
-        master_page_child(element_id, "style:header-first");
-    return header != null_element_id
-               ? header
-               : master_page_child(element_id, "loext:header-first");
+    if (const ElementIdentifier header =
+            master_page_child(element_id, "style:header-first");
+        header != null_element_id) {
+      return header;
+    }
+    return master_page_child(element_id, "loext:header-first");
   }
 
   [[nodiscard]] ElementIdentifier
   master_page_first_footer(const ElementIdentifier element_id) const override {
-    const ElementIdentifier footer =
-        master_page_child(element_id, "style:footer-first");
-    return footer != null_element_id
-               ? footer
-               : master_page_child(element_id, "loext:footer-first");
-  }
-
-  [[nodiscard]] ElementIdentifier
-  paragraph_master_page(const ElementIdentifier element_id) const override {
-    const char *style_name = get_style_name(element_id);
-    return style_name == nullptr
-               ? null_element_id
-               : m_document->style_registry().master_page_of_style(style_name);
+    if (const ElementIdentifier footer =
+            master_page_child(element_id, "style:footer-first");
+        footer != null_element_id) {
+      return footer;
+    }
+    return master_page_child(element_id, "loext:footer-first");
   }
 
   [[nodiscard]] ElementIdentifier
@@ -2064,6 +2037,14 @@ public:
   paragraph_text_style(const ElementIdentifier element_id) const override {
     return get_intermediate_style(element_id).text_style;
   }
+  [[nodiscard]] ElementIdentifier
+  paragraph_master_page(const ElementIdentifier element_id) const override {
+    const char *style_name = get_style_name(element_id);
+    return style_name == nullptr
+               ? null_element_id
+               : m_document->style_registry().master_page_of_style(style_name);
+  }
+
   [[nodiscard]] std::string
   paragraph_marker(const ElementIdentifier element_id) const override {
     return m_registry->list_marker(element_id).text;
@@ -2396,21 +2377,26 @@ public:
   [[nodiscard]] GraphicStyle
   frame_style(const ElementIdentifier element_id) const override {
     GraphicStyle result = get_intermediate_style(element_id).graphic_style;
-    // A shape whose styles state no `draw:fill` is filled: producers write it
-    // only where it differs from solid (AOO i112205), in LibreOffice's
-    // default colour where they state none either. A frame is a box, and
-    // fills nothing unless told to.
-    if (frame_shape_type(element_id) != ShapeType::none &&
-        (!result.fill_color.has_value() || result.fill_color->alpha == 0) &&
-        !result.fill_gradient.has_value() && !result.fill_hatch.has_value() &&
-        !m_document->style_registry().graphic_attribute(
-            style_name_or_empty(element_id), "draw:fill")) {
-      result.fill_color =
-          result.fill_color.value_or(default_shape_fill_color());
-      result.fill_color->alpha = 255;
+    // a shape takes LibreOffice's fill defaults, a frame does not; see
+    // AGENTS.md
+    if (frame_shape_type(element_id) != ShapeType::none) {
+      const StyleRegistry &registry = m_document->style_registry();
+      const char *style_name = get_style_name(element_id);
+      // solid where no `draw:fill` is stated (AOO i112205)
+      if ((!result.fill_color.has_value() || result.fill_color->alpha == 0) &&
+          !result.fill_gradient.has_value() && !result.fill_hatch.has_value() &&
+          !registry.graphic_attribute(style_name, "draw:fill")) {
+        result.fill_color =
+            result.fill_color.value_or(default_shape_fill_color());
+        result.fill_color->alpha = 255;
+      }
+      // in the default color where no `draw:fill-color` is stated
+      if (result.fill_color.has_value() && result.fill_color->alpha != 0 &&
+          !registry.graphic_attribute(style_name, "draw:fill-color")) {
+        result.fill_color = default_shape_fill_color();
+      }
     }
-    // A shadow belongs to the shape that states it; one stated on a frame
-    // around it is cast once, not again by every shape inside.
+    // cast by the shape whose style states it, not again by what it holds
     result.shadow = get_partial_style(element_id).graphic_style.shadow;
     place_by_position(element_id, result);
     return result;
@@ -2464,13 +2450,7 @@ public:
   }
 
 private:
-  /// LibreOffice places a frame where `style:horizontal-pos` says, and
-  /// `style:wrap` only names the sides the text may flow on. `TextWrap` names
-  /// the side the frame floats to, so a stated position decides it: the
-  /// frame floats to its side where text may flow on the other, and stands
-  /// alone at its position where none may, or where it is centred, which css
-  /// cannot flow around. A wrap its style chain does not state, inherited
-  /// from around the frame, is left as it resolved.
+  /// Derives `text_wrap` from a stated `style:horizontal-pos`; see AGENTS.md.
   void place_by_position(const ElementIdentifier element_id,
                          GraphicStyle &style) const {
     if (!style.horizontal_position.has_value() ||
@@ -2481,7 +2461,7 @@ private:
     }
     const std::string_view wrap =
         m_document->style_registry()
-            .graphic_attribute(style_name_or_empty(element_id), "style:wrap")
+            .graphic_attribute(get_style_name(element_id), "style:wrap")
             .value();
     if (wrap.empty()) {
       return;
@@ -2958,12 +2938,6 @@ private:
       return "\t";
     }
     return "";
-  }
-
-  [[nodiscard]] const char *
-  style_name_or_empty(const ElementIdentifier element_id) const {
-    const char *name = get_style_name(element_id);
-    return name != nullptr ? name : "";
   }
 
   [[nodiscard]] const char *

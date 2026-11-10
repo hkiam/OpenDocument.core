@@ -5,6 +5,7 @@
 #include <odr/internal/util/string_util.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <istream>
 #include <string_view>
 
@@ -54,7 +55,9 @@ bool is_utf8_beyond_ascii(std::string_view probe, const bool cut_off) {
         break;
       }
       if (byte >= 0xc0) {
-        const std::size_t length = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : 2;
+        // the length the lead states in its leading ones, at most four
+        const auto length =
+            static_cast<std::size_t>(std::min(std::countl_one(byte), 4));
         if (length > back) {
           probe.remove_suffix(back);
         }
@@ -89,7 +92,9 @@ TextEncoding encoding::detect(const std::string_view probe,
       by_bom != TextEncoding::unknown) {
     return by_bom;
   }
-  // text in a single-byte encoding is well formed utf-8 only by rare accident
+  // uchardet weighs a few such bytes among much ascii by single-byte
+  // statistics; text in a single-byte encoding is well formed utf-8 only by
+  // rare accident
   if (is_utf8_beyond_ascii(probe, cut_off)) {
     return TextEncoding::utf8;
   }

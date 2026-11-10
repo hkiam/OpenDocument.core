@@ -512,8 +512,8 @@ public:
       [[maybe_unused]] const ElementIdentifier element_id) const {
     return null_element_id;
   }
-  /// The number of a heading in a numbered outline, "1.2", resolved against
-  /// the headings before it. Empty for any other paragraph.
+
+  /// A heading's number in a numbered outline, "1.2"; else empty.
   [[nodiscard]] virtual std::string
   paragraph_marker([[maybe_unused]] const ElementIdentifier element_id) const {
     return {};

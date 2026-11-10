@@ -497,17 +497,16 @@ public:
   using ElementBase::ElementBase;
 
   [[nodiscard]] ParagraphStyle style() const;
-  /// The master page whose page this paragraph opens ([OpenDocument] 19.501);
-  /// an absent one where it names none.
+  /// The master page whose page this paragraph opens (20.283); an absent one
+  /// where it names none.
   [[nodiscard]] MasterPage master_page() const;
   /// States the set fields of @p style on the paragraph and leaves the rest.
   /// Only `text_align` is written; any other field refuses with
   /// `UnsupportedOperation`.
   void set_style(const ParagraphStyle &style) const;
   [[nodiscard]] TextStyle text_style() const;
-  /// The number a heading of a numbered outline is labelled with, "1.2",
-  /// already resolved against the headings before it. Empty for any other
-  /// paragraph; a paragraph in a list takes the item's `ListItem::marker`.
+  /// A heading's number in a numbered outline, "1.2"; empty for any other
+  /// paragraph, also one in a list (see `ListItem::marker`).
   [[nodiscard]] std::string marker() const;
 };
 

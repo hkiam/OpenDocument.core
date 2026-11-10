@@ -15,16 +15,8 @@ using namespace odr;
 
 namespace {
 
-std::string flat_document(const std::string &mimetype, const std::string &body,
-                          const std::string &styles = "") {
-  return R"(<?xml version="1.0" encoding="UTF-8"?>)"
-         R"(<office:document office:mimetype=")" +
-         mimetype + R"(">)" + styles + "<office:body>" + body +
-         "</office:body></office:document>";
-}
-
 std::string render(const std::string &source) {
-  HtmlConfig config(
+  const HtmlConfig config(
       (std::filesystem::current_path() / "odf_presentation").string());
   std::ostringstream out;
   html::translate(open(File::from_memory(source)), config)
@@ -43,34 +35,32 @@ std::size_t count(const std::string &haystack, const std::string &needle) {
   return result;
 }
 
-} // namespace
-
-namespace {
-
 /// A presentation whose master page holds a title and an outline placeholder,
 /// as PowerPoint's and Impress's layouts do, beside a logo that is no
 /// placeholder.
 std::string presentation_with_placeholders() {
-  return flat_document(
-      "application/vnd.oasis.opendocument.presentation",
-      R"(<office:presentation><draw:page draw:name="one")"
-      R"( draw:master-page-name="Master">)"
-      R"(<draw:frame presentation:class="title" svg:x="1cm" svg:y="1cm")"
-      R"( svg:width="20cm" svg:height="2cm"><draw:text-box>)"
-      R"(<text:p>Quarterly report</text:p></draw:text-box></draw:frame>)"
-      R"(</draw:page></office:presentation>)",
-      R"(<office:master-styles><style:master-page style:name="Master">)"
-      R"(<draw:frame presentation:class="title" svg:x="1cm" svg:y="1cm")"
-      R"( svg:width="20cm" svg:height="2cm"><draw:text-box>)"
-      R"(<text:p>Click to edit Master title style</text:p>)"
-      R"(</draw:text-box></draw:frame>)"
-      R"(<draw:frame presentation:class="outline" svg:x="1cm" svg:y="4cm")"
-      R"( svg:width="20cm" svg:height="10cm"><draw:text-box>)"
-      R"(<text:p>Second level</text:p></draw:text-box></draw:frame>)"
-      R"(<draw:frame svg:x="22cm" svg:y="1cm" svg:width="3cm")"
-      R"( svg:height="1cm"><draw:text-box><text:p>Logo</text:p>)"
-      R"(</draw:text-box></draw:frame>)"
-      R"(</style:master-page></office:master-styles>)");
+  return R"(<?xml version="1.0" encoding="UTF-8"?>)"
+         R"(<office:document office:mimetype=")"
+         R"(application/vnd.oasis.opendocument.presentation">)"
+         R"(<office:master-styles><style:master-page style:name="Master">)"
+         R"(<draw:frame presentation:class="title" svg:x="1cm" svg:y="1cm")"
+         R"( svg:width="20cm" svg:height="2cm"><draw:text-box>)"
+         R"(<text:p>Click to edit Master title style</text:p>)"
+         R"(</draw:text-box></draw:frame>)"
+         R"(<draw:frame presentation:class="outline" svg:x="1cm" svg:y="4cm")"
+         R"( svg:width="20cm" svg:height="10cm"><draw:text-box>)"
+         R"(<text:p>Second level</text:p></draw:text-box></draw:frame>)"
+         R"(<draw:frame svg:x="22cm" svg:y="1cm" svg:width="3cm")"
+         R"( svg:height="1cm"><draw:text-box><text:p>Logo</text:p>)"
+         R"(</draw:text-box></draw:frame>)"
+         R"(</style:master-page></office:master-styles>)"
+         R"(<office:body><office:presentation><draw:page draw:name="one")"
+         R"( draw:master-page-name="Master">)"
+         R"(<draw:frame presentation:class="title" svg:x="1cm" svg:y="1cm")"
+         R"( svg:width="20cm" svg:height="2cm"><draw:text-box>)"
+         R"(<text:p>Quarterly report</text:p></draw:text-box></draw:frame>)"
+         R"(</draw:page></office:presentation></office:body>)"
+         R"(</office:document>)";
 }
 
 } // namespace

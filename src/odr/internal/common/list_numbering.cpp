@@ -8,8 +8,10 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
 namespace odr::internal {
 
@@ -52,117 +54,94 @@ std::string format_roman(std::uint32_t number, const bool upper) {
   return result;
 }
 
-/// The characters of the Symbol font that lists use, by their byte, in
-/// Unicode after Adobe's `symbol.txt`, which leaves the horizontal line
-/// 0xBE in its private use area.
-std::string_view symbol_character(const char32_t byte) {
-  switch (byte) {
-  case 0x2A:
-    return "∗";
-  case 0x2D:
-    return "−";
-  case 0x3E:
-    return ">";
-  case 0xA7:
-    return "♣";
-  case 0xA8:
-    return "♦";
-  case 0xAE:
-    return "→";
-  case 0xB7:
-    return "•";
-  case 0xBE:
-    return "⎯";
-  case 0xD8:
-    return "¬";
-  case 0xDE:
-    return "⇒";
-  case 0xE0:
-    return "◊";
-  default:
-    return {};
-  }
-}
+/// The Symbol font's characters that lists use, by their byte, in Unicode
+/// after Adobe's `symbol.txt`, which leaves the horizontal line 0xBE in its
+/// private use area.
+constexpr std::array<std::pair<char32_t, std::string_view>, 11>
+    symbol_characters{{
+        {0x2A, "∗"},
+        {0x2D, "−"},
+        {0x3E, ">"},
+        {0xA7, "♣"},
+        {0xA8, "♦"},
+        {0xAE, "→"},
+        {0xB7, "•"},
+        {0xBE, "⎯"},
+        {0xD8, "¬"},
+        {0xDE, "⇒"},
+        {0xE0, "◊"},
+    }};
 
-/// The characters of the Wingdings font that lists use, by their byte, in
-/// Unicode.
-std::string_view wingdings_character(const char32_t byte) {
-  switch (byte) {
-  case 0x6C:
-    return "●";
-  case 0x6E:
-    return "■";
-  case 0x6F:
-    return "□";
-  case 0x71:
-    return "❑";
-  case 0x75:
-    return "◆";
-  case 0x76:
-    return "❖";
-  case 0x77:
-    return "⬥";
-  case 0xA7:
-    return "▪";
-  case 0xA8:
-    return "◻";
-  case 0xD8:
-    return "➢";
-  case 0xF0:
-    return "⇨";
-  case 0xFC:
-    return "✓";
-  case 0xFD:
-    return "☒";
-  case 0xFE:
-    return "☑";
-  default:
-    return {};
-  }
-}
+/// The Wingdings font's characters that lists use, by their byte, in Unicode.
+constexpr std::array<std::pair<char32_t, std::string_view>, 14>
+    wingdings_characters{{
+        {0x6C, "●"},
+        {0x6E, "■"},
+        {0x6F, "□"},
+        {0x71, "❑"},
+        {0x75, "◆"},
+        {0x76, "❖"},
+        {0x77, "⬥"},
+        {0xA7, "▪"},
+        {0xA8, "◻"},
+        {0xD8, "➢"},
+        {0xF0, "⇨"},
+        {0xFC, "✓"},
+        {0xFD, "☒"},
+        {0xFE, "☑"},
+    }};
 
-/// The characters of the Zapf Dingbats font that lists use, by their byte, in
+/// The Zapf Dingbats font's characters that lists use, by their byte, in
 /// Unicode, whose Dingbats block follows the font.
-std::string_view zapf_dingbats_character(const char32_t byte) {
-  switch (byte) {
-  case 0x6C:
-    return "●";
-  case 0x6E:
-    return "■";
-  case 0x6F:
-    return "❏";
-  case 0x71:
-    return "❑";
-  case 0x75:
-    return "◆";
-  case 0x76:
-    return "❖";
-  default:
-    return {};
-  }
-}
+constexpr std::array<std::pair<char32_t, std::string_view>, 6>
+    zapf_dingbats_characters{{
+        {0x6C, "●"},
+        {0x6E, "■"},
+        {0x6F, "❏"},
+        {0x71, "❑"},
+        {0x75, "◆"},
+        {0x76, "❖"},
+    }};
 
-/// A symbol font's characters by their byte, empty for one it lacks.
-using CharacterTable = std::string_view (*)(char32_t);
+/// A symbol font's characters by their byte.
+using CharacterTable = std::span<const std::pair<char32_t, std::string_view>>;
 
 /// The table for @p font_family, which comes quoted from `svg:font-family`,
-/// or null for a font that encodes its characters as Unicode.
+/// or empty for a font that encodes its characters as Unicode.
 CharacterTable symbol_font_table(std::string_view font_family) {
   font_family = util::string::trim_view(font_family, [](const char c) {
     return c == '\'' || c == '"' || util::string::is_ascii_whitespace(c);
   });
   if (util::string::equals_ignore_case(font_family, "Symbol")) {
-    return symbol_character;
+    return symbol_characters;
   }
   if (util::string::equals_ignore_case(font_family, "Wingdings")) {
-    return wingdings_character;
+    return wingdings_characters;
   }
   if (util::string::equals_ignore_case(font_family, "ZapfDingbats") ||
       util::string::equals_ignore_case(font_family, "Zapf Dingbats") ||
       util::string::equals_ignore_case(font_family, "ITC Zapf Dingbats")) {
-    return zapf_dingbats_character;
+    return zapf_dingbats_characters;
   }
-  return nullptr;
+  return {};
+}
+
+/// The byte a symbol font's @p character stands for, stated as the byte or at
+/// U+F0xx, or 0 for any other character.
+char32_t symbol_font_byte(const char32_t character) {
+  if (character >= 0xF020 && character <= 0xF0FF) {
+    return character - 0xF000;
+  }
+  if (character >= 0x20 && character <= 0xFF) {
+    return character;
+  }
+  return 0;
+}
+
+/// The bullet of @p level (counted from 0) where the stated one cannot show.
+std::string default_bullet(const std::uint32_t level) {
+  static constexpr std::array<const char *, 3> defaults{"•", "◦", "▪"};
+  return defaults[level % defaults.size()];
 }
 
 } // namespace
@@ -196,30 +175,22 @@ std::string internal::format_list_number(const ListNumberFormat format,
 std::string internal::resolve_bullet(const std::string &text,
                                      const std::uint32_t level,
                                      const std::string_view font_family) {
-  static constexpr std::array<const char *, 3> defaults{"•", "◦", "▪"};
-
   if (text.empty() || !util::string::is_valid_utf8(text)) {
-    return defaults[level % defaults.size()];
+    return default_bullet(level);
   }
 
   std::string_view remaining = text;
   const char32_t first = util::string::next_utf8(remaining);
   const CharacterTable table = symbol_font_table(font_family);
-  // a symbol font is read at its byte, whether stated as it or at U+F0xx
-  const char32_t byte = first >= 0xF020 && first <= 0xF0FF ? first - 0xF000
-                        : first >= 0x20 && first <= 0xFF   ? first
-                                                           : 0;
-  if (table != nullptr && byte != 0) {
-    if (const std::string_view character = table(byte); !character.empty()) {
-      return std::string(character);
-    }
-    return defaults[level % defaults.size()];
+  const char32_t byte = symbol_font_byte(first);
+  if (table.empty() || byte == 0) {
+    // a private-use character means nothing outside its font
+    return first >= 0xE000 && first <= 0xF8FF ? default_bullet(level) : text;
   }
-  // a private-use character means nothing outside its font
-  if (first >= 0xE000 && first <= 0xF8FF) {
-    return defaults[level % defaults.size()];
-  }
-  return text;
+  const auto it = std::ranges::find(
+      table, byte, &std::pair<char32_t, std::string_view>::first);
+  return it != std::end(table) ? std::string(it->second)
+                               : default_bullet(level);
 }
 
 } // namespace odr
@@ -255,15 +226,15 @@ std::string ListCounter::advance(const std::uint32_t level,
         placeholder = static_cast<std::uint32_t>(label[i + 1] - '0');
         length = 2;
       } else if (label[i + 1] == '{') {
-        const std::size_t close = label.find('}', i + 2);
-        if (const std::optional<std::uint32_t> number =
-                close == std::string::npos
-                    ? std::nullopt
-                    : util::number::parse_integer<std::uint32_t>(
-                          std::string_view(label).substr(i + 2, close - i - 2));
-            number.has_value() && *number > 0) {
-          placeholder = *number;
-          length = close - i + 1;
+        if (const std::size_t close = label.find('}', i + 2);
+            close != std::string::npos) {
+          if (const std::optional<std::uint32_t> number =
+                  util::number::parse_integer<std::uint32_t>(
+                      std::string_view(label).substr(i + 2, close - i - 2));
+              number.has_value() && *number > 0) {
+            placeholder = *number;
+            length = close - i + 1;
+          }
         }
       }
     }

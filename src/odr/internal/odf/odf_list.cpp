@@ -73,11 +73,7 @@ std::string bullet_font_family(const pugi::xml_node level_style,
   return properties.attribute("fo:font-family").value();
 }
 
-/// Level @p level (counted from 0) of @p list_style. A number's label is the
-/// prefix, the numbers of the last `text:display-levels` levels joined by a
-/// period, and the suffix. A level without a format and the period after it
-/// are left out, and where the level itself has none, only prefix and suffix
-/// are, as LibreOffice's `SwNumRule::MakeNumString` does.
+/// Level @p level (counted from 0) of @p list_style, as LibreOffice labels it.
 ListLevel read_level(const pugi::xml_node list_style, const std::uint32_t level,
                      const StyleRegistry &styles) {
   ListLevel result;
@@ -139,6 +135,29 @@ bool is_ordered(const ListNumberFormat format) {
   return format != ListNumberFormat::bullet && format != ListNumberFormat::none;
 }
 
+/// Opens each level above @p level that no item has opened yet at its start.
+void start_skipped_levels(ListCounter &counter, const pugi::xml_node list_style,
+                          const std::uint32_t level,
+                          const StyleRegistry &styles) {
+  for (std::uint32_t skipped = 0; skipped < level; ++skipped) {
+    counter.start(skipped, read_level(list_style, skipped, styles));
+  }
+}
+
+/// Whether @p list_item has a paragraph to number before any nested list.
+bool has_own_paragraph(const pugi::xml_node list_item) {
+  for (const pugi::xml_node child : list_item.children()) {
+    const std::string_view name = child.name();
+    if (name == "text:p" || name == "text:h") {
+      return true;
+    }
+    if (name == "text:list") {
+      return false;
+    }
+  }
+  return false;
+}
+
 class Resolver final {
 public:
   Resolver(ElementRegistry &registry, const StyleRegistry &styles)
@@ -184,17 +203,6 @@ private:
     return read_level(m_styles->list_style_node(style_name), level, *m_styles);
   }
 
-  /// LibreOffice opens each level above @p level that no item has opened yet
-  /// at its start, so an item that skips a level reads "1.1" and the next one
-  /// on the skipped level is its second.
-  void start_skipped_levels_(ListCounter &counter,
-                             const pugi::xml_node list_style,
-                             const std::uint32_t level) const {
-    for (std::uint32_t skipped = 0; skipped < level; ++skipped) {
-      counter.start(skipped, read_level(list_style, skipped, *m_styles));
-    }
-  }
-
   void walk_list_(const ElementIdentifier id,
                   const ElementRegistry::Element &element) {
     const auto level = static_cast<std::uint32_t>(m_open_lists.size());
@@ -223,8 +231,7 @@ private:
     m_open_lists.pop_back();
   }
 
-  /// A heading takes its number from the outline style at its
-  /// `text:outline-level`; one in a list is numbered as a list item instead.
+  /// Numbers a heading after the outline style at its `text:outline-level`.
   void number_heading_(const ElementIdentifier id,
                        const ElementRegistry::Element &element) {
     const pugi::xml_node node = element.node;
@@ -248,30 +255,12 @@ private:
       m_outline.restart(level, 0);
     }
 
-    start_skipped_levels_(m_outline, outline_style, level);
+    start_skipped_levels(m_outline, outline_style, level, *m_styles);
     ListMarker marker;
     marker.text = m_outline.advance(level, list_level);
     if (!marker.text.empty()) {
       m_registry->set_list_marker(id, std::move(marker));
     }
-  }
-
-  /// Whether a list item has a paragraph of its own to carry a number, before
-  /// any nested list. Word writes an item of a deeper level as an item of each
-  /// level above that holds nothing but the nested list. LibreOffice numbers
-  /// paragraphs, so such an item is neither labelled nor counted. A table, a
-  /// page break or the label a producer cached may come first.
-  static bool has_own_paragraph(const pugi::xml_node list_item) {
-    for (const pugi::xml_node child : list_item.children()) {
-      const std::string_view name = child.name();
-      if (name == "text:p" || name == "text:h") {
-        return true;
-      }
-      if (name == "text:list") {
-        return false;
-      }
-    }
-    return false;
   }
 
   void walk_list_item_(const ElementIdentifier id,
@@ -291,8 +280,8 @@ private:
         counter.restart(level, 0);
       }
 
-      start_skipped_levels_(counter, m_styles->list_style_node(style_name),
-                            level);
+      start_skipped_levels(counter, m_styles->list_style_node(style_name),
+                           level, *m_styles);
       ListMarker marker;
       marker.text = counter.advance(level, list_level);
       if (is_ordered(list_level.format)) {

@@ -97,7 +97,7 @@ void html::translate_element(const Element &element,
     translate_line_break(element, state);
     break;
   case ElementType::paragraph:
-    translate_paragraph(element, state, element.as_paragraph().marker(), true);
+    translate_paragraph(element, state);
     break;
   case ElementType::span:
     translate_span(element, state);
@@ -277,9 +277,13 @@ void html::translate_page_break(const Element & /*element*/,
 }
 
 void html::translate_paragraph(const Element &element,
-                               const WritingState &state,
-                               const std::string &marker, const bool heading) {
+                               const WritingState &state, std::string marker) {
   const Paragraph paragraph = element.as_paragraph();
+  // a heading's number has no list indent to hang into
+  const bool heading = marker.empty();
+  if (heading) {
+    marker = paragraph.marker();
+  }
 
   state.out().write_element_begin(
       "x-p",
@@ -717,8 +721,8 @@ void translate_custom_shape(const Frame &frame, const GraphicStyle &style,
       translate_fill_layer(frame, style,
                            number(path->x) + " " + number(path->y) + " " +
                                number(path->width) + " " + number(path->height),
-                           "<path fill-rule=\"evenodd\" d=\"" +
-                               xml::escape_attribute(path->data) + "\"/>",
+                           R"(<path fill-rule="evenodd" d=")" +
+                               xml::escape_attribute(path->data) + R"("/>)",
                            state);
     }
     state.out().write_new_line();

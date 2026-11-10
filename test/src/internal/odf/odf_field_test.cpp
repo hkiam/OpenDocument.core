@@ -77,7 +77,20 @@ TEST(OdfField, a_field_displayed_as_none_shows_nothing) {
             "5");
 }
 
-TEST(OdfField, hidden_text_shows_where_its_condition_is_false) {
+TEST(OdfField, a_field_without_text_leaves_its_paragraph_empty) {
+  // so the paragraph keeps the height of an empty line
+  const Document document =
+      open(File::from_memory(flat_document(
+               "application/vnd.oasis.opendocument.text",
+               R"(<office:text><text:p><text:hidden-text)"
+               R"( text:condition="ooow:1==1" text:string-value="x"/>)"
+               R"(</text:p></office:text>)")))
+          .as_document_file()
+          .document();
+  EXPECT_FALSE(document.root_element().first_child().first_child());
+}
+
+TEST(OdfField, hidden_text_shows_unless_saved_as_hidden) {
   EXPECT_EQ(text_of(R"(<text:p>shown<text:hidden-text text:condition="ooow:1")"
                     R"( text:string-value="no" text:is-hidden="true">no)"
                     R"(</text:hidden-text></text:p>)"),
@@ -86,9 +99,14 @@ TEST(OdfField, hidden_text_shows_where_its_condition_is_false) {
                     R"( text:string-value="yes" text:is-hidden="false">yes)"
                     R"(</text:hidden-text></text:p>)"),
             "yes");
+  // `text:is-hidden` defaults to false
+  EXPECT_EQ(
+      text_of(R"(<text:p><text:hidden-text text:condition="ooow:0")"
+              R"( text:string-value="yes">yes</text:hidden-text></text:p>)"),
+      "yes");
 }
 
-TEST(OdfField, ruby_shows_its_base_text) {
+TEST(OdfRuby, shows_its_base_text) {
   EXPECT_EQ(text_of(R"(<text:p><text:ruby><text:ruby-base>漢字)"
                     R"(</text:ruby-base><text:ruby-text>かんじ)"
                     R"(</text:ruby-text></text:ruby></text:p>)"),
@@ -119,7 +137,10 @@ TEST(OdfField, a_field_is_not_editable) {
       open(File::from_memory(
                flat_document("application/vnd.oasis.opendocument.text",
                              R"(<office:text><text:p>Page <text:page-count>5)"
-                             R"(</text:page-count></text:p></office:text>)")))
+                             R"(</text:page-count><text:hidden-text)"
+                             R"( text:condition="ooow:0" text:string-value="x")"
+                             R"( text:is-hidden="false">x</text:hidden-text>)"
+                             R"(</text:p></office:text>)")))
           .as_document_file()
           .document();
   const Element paragraph = document.root_element().first_child();
@@ -129,6 +150,10 @@ TEST(OdfField, a_field_is_not_editable) {
   EXPECT_TRUE(run.is_editable());
   EXPECT_FALSE(field.is_editable());
   EXPECT_FALSE(field.first_child().is_editable());
+  // hidden text it shows is a field's text too
+  const Element hidden_text = field.next_sibling();
+  ASSERT_EQ(hidden_text.type(), ElementType::group);
+  EXPECT_FALSE(hidden_text.first_child().is_editable());
 }
 
 TEST(OdfField, a_page_number_in_a_footer_shows_nothing) {

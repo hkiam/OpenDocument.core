@@ -28,50 +28,26 @@ The release run heads these entries with the version and opens a fresh
 
 ### Text documents and presentations
 
-- An odf shape or text box filled with a gradient or a hatch
-  (`draw:fill="gradient"` / `"hatch"`) is painted, with LibreOffice's
-  geometry: an axial gradient has its start color on the axis, a radial one is
-  a circle reaching half the box's diagonal, square and rectangular ones are
-  drawn as the ellipsoid. What a gradient leaves unstated is black, with its
-  centre at 0 %. A unitless `draw:angle` is in degrees, or in tenths of a
-  degree as LibreOffice reads it: below ODF 1.2 or with no version, and at
-  1.2 from OpenOffice.org or a LibreOffice before 7. A hatch is an svg
-  pattern, its lines at least 2 px apart, over its fill color where
-  `draw:fill-hatch-solid` asks for it. Multi-color and transparency gradients
-  (`loext:gradient-stop`, `draw:opacity-name`) are not read.
-- An odf shape whose styles state no `draw:fill` is filled, as LibreOffice
-  fills it: producers leave the solid default unwritten. One that states no
-  fill color either takes LibreOffice's, #729fcf. A frame (`draw:frame`)
-  still fills nothing unless told to.
-- An odf shape with `draw:shadow="visible"` casts one shadow, offset,
-  colored, translucent and blurred as its style states, around its fill and
-  its outline; a frame casts a box shadow.
-- The dark sheet clears a gradient or hatch as it clears a solid fill.
-- With `text_document_margin`, an odt's page box carries the header and the
-  footer of its master page, its first page's (`style:header-first`) where
-  the box opens a run of that master page and the page has a header or
-  footer. A paragraph naming another master page opens a box of that page's
-  size and margins, as it opens a page in LibreOffice; a later box takes the
-  next master page (`style:next-style-name`), and page one takes the first
-  content's master page, else "Standard". The header's height holds its
-  spacing, as in LibreOffice, and its lists are numbered. A box is a run
-  between breaks, not a page; `style:header-left`, the header's own margins,
-  border and background, and a master page named inside a section, list or
-  table are not read. In an editable view the header and footer carry no
-  editing address.
+- An odf shape or text box filled with a gradient or a hatch is painted as
+  LibreOffice paints it; square and rectangular gradients are drawn as an
+  ellipse. Multi-color and transparency gradients are not read. The dark sheet
+  clears a gradient or hatch as it clears a solid fill.
+- An odf shape whose style states no fill is filled, in LibreOffice's default
+  color where it states none. A text frame still fills only as told.
+- An odf shape or text frame casts the shadow its style states.
+- With `text_document_margin`, an odt's page box shows the header and footer
+  of its master page, the first page's where it differs; a paragraph naming a
+  master page opens a box of that page. `style:header-left` and the headers'
+  own margins, border and background are not read.
 - The headings of an odt are numbered after its `text:outline-style`, "1",
   "1.1", "1.2.1", as Word and LibreOffice number chapters, up to the ten
-  levels LibreOffice has. The new `Paragraph::marker` returns that number,
-  empty for any other paragraph, in Python, Java and Objective-C too. The
-  HTML writes it before the heading.
-
-### Spreadsheets
-
-- A number, date, time or boolean cell of an ods that the file saved without
-  text shows its value in its data style, as LibreOffice formats it on
-  loading, and counts as content of the sheet. A row of sums saved by
-  LibreOffice 4.2 was blank, and a column of them at the sheet's edge was
-  cut off. `SheetCell::value` states that text too.
+  levels LibreOffice has. The HTML writes the number before the heading.
+- Lists and the outline of an odt count as LibreOffice does: a list item that
+  holds no paragraph, only a nested list, is not counted; a level an item
+  skips opens at its start; and a level without a number format is left out of
+  the label with its period. A form saved by Word numbered its fields "2.1.",
+  "3.1." where Word and LibreOffice show "1.1.", "1.2.". A list may name the
+  outline as its style.
 
 ### API, files and saving
 
@@ -81,59 +57,45 @@ The release run heads these entries with the version and opens a fresh
   and `next_master_page()`, `Paragraph` has `master_page()`, and `PageLayout`
   the `header_min_height`, `header_spacing`, `footer_min_height` and
   `footer_spacing` the layout states.
+- The new `Paragraph::marker` returns a heading's number in a numbered
+  outline, empty for any other paragraph, in Python, Java and Objective-C
+  too.
 
 ### Fixes
 
+- A shape or connector with a stroke width of zero is drawn with a hairline,
+  as LibreOffice draws it. It was invisible.
+- An odf shape whose style turns the stroke off (`draw:stroke="none"`) is no
+  longer outlined with an inherited stroke color. `GraphicStyle::stroke_color`
+  then has an alpha of 0.
+- An odt or odg whose page layout states no paper size is laid out on A4; one
+  stating only its width or height takes the other from A4.
+- An odt frame stands at its `style:horizontal-pos` whatever its
+  `style:wrap`, as in LibreOffice. A header logo wrapped `dynamic` and
+  positioned `left` floated right.
 - A doc, xls or ppt opens when its storage directory gives a stream a child or
   links to an unused slot. A link past the directory throws `CfbFileCorrupted`,
   not a `std::invalid_argument` with an empty message.
 - A text file in utf-8 with few non-ascii characters among much ascii, for
   example a flat odt with a single soft hyphen or umlaut, opens. uchardet
   named it MAC-CENTRALEUROPE, IBM852 or ISO-8859-11, and the file was
-  `UnknownFileType`. Well formed utf-8 beyond ascii is now utf-8 before
-  uchardet is asked.
-- A shape or connector with a stroke width of zero is drawn with a hairline,
-  as LibreOffice draws it. It was invisible. An odf shape whose style turns
-  the stroke off (`draw:stroke="none"`) is no longer outlined with an
-  inherited stroke color; `GraphicStyle::stroke_color` has an alpha of 0 for
-  it.
-- An odt or odg whose page layout states no paper size, as LibreOffice's
-  letter and BPMN templates do, is laid out on A4 portrait, LibreOffice's
-  paper in an A4 locale; a layout stating only its width or height takes the
-  other from A4. A text page had no width, so with `text_document_margin` no
-  line wrapped, and the pages of a drawing had no box and were drawn over
-  each other. A sheet still takes none and prints to the printer's paper.
-- An odt frame with a stated `style:horizontal-pos` sits where it says, as
-  in LibreOffice, whatever its `style:wrap`: it floats to its side where text
-  may flow on the other, and stands alone where none may or where it is
-  centred. A frame wrapped `dynamic` and positioned `left`, as a header's
-  logo, floated right.
-- Lists and the outline of an odt count as LibreOffice does: a list item
-  that holds no paragraph, only a nested list, is not counted; a level an
-  item skips opens at its start; and a level without a number format is left
-  out of the label with its period. Word writes each item of level 2 as such
-  an item, so a form numbered its fields "2.1.", "3.1." where Word and
-  LibreOffice show "1.1.", "1.2.". A list may name the outline as its style.
+  `UnknownFileType`.
+- The fields of an odt show the text their producer saved, read-only; only
+  date and time did. A field displayed as `none`, hidden text saved as
+  hidden, and a page number in a header, footer or Impress placeholder stay
+  empty.
+- An odt's ruby shows its base text; it showed nothing.
+- A slide no longer draws its master page's placeholders, such as "Click to
+  edit Master title style" over its own title. `MasterPage::children` leaves
+  them out.
 - A list bullet set in Symbol, Wingdings or Zapf Dingbats shows as its
-  Unicode character in an odt too, not as a box or a letter: Symbol's dot
-  U+F0B7, Wingdings' square U+F0A7 or "§", Wingdings' "v". In a docx, the
-  bullet's font now tells the fonts apart, so Symbol's dot is a dot on every
-  level. Any other private-use bullet, such as one of OpenSymbol, takes the
-  level's default.
-- The fields of an odt show the text their producer computed: page count,
-  title, sender, chapter, caption numbers, cross-references and the rest of
-  [OpenDocument] 7. Only the date and time showed it. Their text is not
-  editable, as LibreOffice computes it again. A field displayed as `none`,
-  hidden text whose condition holds, and a page number with no one number to
-  show stay empty: in a header or footer, where it is the number of each
-  page, and Impress's `<number>` placeholder.
-- A slide no longer shows its master page's placeholders: the prompts of
-  PowerPoint and Impress layouts such as "Click to edit Master title style"
-  drew over the slide's own title and text. A master page object with a
-  `presentation:class` is not drawn, and `MasterPage::children` leaves it
-  out. LibreOffice draws title and outline placeholders on no slide either;
-  footer, date and slide number ones it draws where the slide asks for them,
-  which is not read yet, so they are left out as well.
+  Unicode character in an odt too (Symbol's U+F0B7 as •, Wingdings' "§" as
+  ▪), not as a box or a letter. In a docx, the bullet's font now tells the
+  fonts apart, so Symbol's dot is a dot on every level. Any other private-use
+  bullet, such as one of OpenSymbol, takes the level's default.
+- An ods cell saved with a value but without its text, as LibreOffice 4.2
+  saved a row of sums, shows the value in its data style and counts as
+  content of the sheet. It was blank. `SheetCell::value` states that text.
 - A text style that names its family in `fo:font-family`, as PowerPoint's odp
   and many odg and ods do, is set in that family rather than the browser's
   default serif. `style:font-name` still outranks it, and PowerPoint's

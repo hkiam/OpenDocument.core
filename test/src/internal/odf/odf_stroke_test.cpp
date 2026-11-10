@@ -106,9 +106,11 @@ TEST(OdfStroke, stroke_none_with_no_colour_anywhere_draws_no_stroke) {
                 R"(</style:style>)",
                 rect("bare"));
 
-  HtmlConfig config;
   std::ostringstream html;
-  html::translate(odr::open(path), config).list_views().at(0).write_html(html);
+  html::translate(odr::open(path), HtmlConfig())
+      .list_views()
+      .at(0)
+      .write_html(html);
   EXPECT_NE(html.str().find("stroke:none"), std::string::npos);
   EXPECT_EQ(html.str().find("stroke:#"), std::string::npos);
 }

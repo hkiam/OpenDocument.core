@@ -232,7 +232,7 @@ struct TableCellStyle final {
   void override(const TableCellStyle &other);
 };
 
-/// Collection of gradient shapes ([OpenDocument] 19.226.3 `draw:style`).
+/// Collection of gradient shapes.
 enum class GradientStyle {
   linear,
   axial,
@@ -242,10 +242,10 @@ enum class GradientStyle {
   rectangular,
 };
 
-/// A gradient fill ([OpenDocument] 16.40.4 `draw:gradient`).
+/// A gradient fill.
 struct GradientFill final {
   GradientStyle style{GradientStyle::linear};
-  /// The colors with `draw:start-intensity` and `draw:end-intensity` applied.
+  /// The colors with their intensities applied.
   Color start_color;
   Color end_color;
   /// Degrees, counterclockwise. At 0 a linear gradient runs from the start
@@ -253,20 +253,20 @@ struct GradientFill final {
   double angle{0};
   /// The fraction of the gradient painted in the start color only.
   double border{0};
-  /// The centre of a radial, ellipsoid, square or rectangular gradient, as
+  /// The center of a radial, ellipsoid, square or rectangular gradient, as
   /// fractions of the shape's width and height.
   double center_x{0.5};
   double center_y{0.5};
 };
 
-/// Collection of hatch patterns ([OpenDocument] 19.226.4 `draw:style`).
+/// Collection of hatch patterns.
 enum class HatchStyle {
   single,  ///< parallel lines
-  crossed, ///< the lines and their perpendicular (`double`)
+  crossed, ///< the lines and their perpendicular
   triple,  ///< crossed, plus the diagonal between them
 };
 
-/// A hatch fill ([OpenDocument] 16.40.6 `draw:hatch`).
+/// A hatch fill.
 struct HatchFill final {
   HatchStyle style{HatchStyle::single};
   Color color;
@@ -276,13 +276,13 @@ struct HatchFill final {
   double rotation{0};
 };
 
-/// The shadow a shape casts ([OpenDocument] 20.115 `draw:shadow`).
+/// The shadow a shape casts.
 struct Shadow final {
   Measure offset_x{0, DynamicUnit()};
   Measure offset_y{0, DynamicUnit()};
-  /// The color, with `draw:shadow-opacity` in its alpha.
+  /// The color, with the opacity in its alpha.
   Color color;
-  /// The blur radius (`loext:shadow-blur`); zero is a sharp edge.
+  /// The blur radius; zero is a sharp edge.
   Measure blur{0, DynamicUnit()};
 };
 
@@ -292,26 +292,20 @@ struct GraphicStyle final {
   /// An alpha of 0 is no stroke (`draw:stroke="none"`), as it is no fill for
   /// @ref fill_color: the state and the color cascade independently.
   std::optional<Color> stroke_color;
-  /// The solid fill; behind @ref fill_hatch where the hatch is solid. Its
-  /// alpha states whether there is one, 0 or 255, not an opacity: the colour
-  /// a style names is kept where its fill is off. @ref Shadow::color carries
-  /// an opacity.
+  /// The solid fill, also behind a solid hatch. Its alpha is 0 or 255, whether
+  /// it paints, not an opacity.
   std::optional<Color> fill_color;
   std::optional<VerticalAlign> vertical_align;
   std::optional<TextWrap> text_wrap;
   /// The side a frame sits on; unset where its offset decides instead.
   std::optional<HorizontalAlign> horizontal_position;
-  /// Set where `draw:fill` is `gradient`; paints over @ref fill_color.
+  /// Paints over @ref fill_color.
   std::optional<GradientFill> fill_gradient;
-  /// Set where `draw:fill` is `hatch`.
   std::optional<HatchFill> fill_hatch;
-  /// Set where `draw:shadow` is `visible`.
+  /// Unset where the shape casts none.
   std::optional<Shadow> shadow;
 
-  /// Takes each field @p other sets. One it leaves unset is kept, so it
-  /// cannot clear an inherited gradient, hatch or shadow; a style that turns
-  /// them off states `draw:fill` and `draw:shadow`, which the reader resolves
-  /// before.
+  /// Takes what @p other sets; any fill it sets replaces gradient and hatch.
   void override(const GraphicStyle &other);
 };
 
@@ -325,12 +319,13 @@ struct PageLayout final {
   std::optional<Color> background_color;
   /// The base direction, inherited by paragraphs stating none of their own.
   std::optional<TextDirection> direction;
-  /// The least height of the header ([OpenDocument] 17.5), and the space
-  /// between it and the body; unset where the layout states none.
+  /// The least height of the header ([OpenDocument] 17.5).
   std::optional<Measure> header_min_height;
+  /// The space between the header and the body.
   std::optional<Measure> header_spacing;
-  /// The same for the footer, the space being above it.
+  /// The least height of the footer.
   std::optional<Measure> footer_min_height;
+  /// The space between the body and the footer.
   std::optional<Measure> footer_spacing;
 };
 

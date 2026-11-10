@@ -60,7 +60,7 @@ std::vector<std::optional<std::string>> texts_of(const std::string &source,
 }
 
 std::string render(const std::string &source) {
-  HtmlConfig config(
+  const HtmlConfig config(
       (std::filesystem::current_path() / "odf_sheet_uncached").string());
   std::ostringstream out;
   html::translate(open(File::from_memory(source)), config)
@@ -132,6 +132,20 @@ TEST(OdfSheetUncached, a_comment_is_no_text_of_the_cell) {
                               R"(</table:table-cell>)"),
                      1)[0],
             "7");
+}
+
+TEST(OdfSheetUncached, a_frame_anchored_in_the_cell_is_no_text_of_it) {
+  // the value shows beside the frame, which keeps its own text
+  const std::string source =
+      sheet_of(R"(<table:table-cell office:value-type="float")"
+               R"( office:value="7"><draw:frame svg:width="2cm")"
+               R"( svg:height="1cm"><draw:text-box><text:p>Note</text:p>)"
+               R"(</draw:text-box></draw:frame><text:p/></table:table-cell>)");
+  EXPECT_EQ(texts_of(source, 1)[0], "7");
+
+  const std::string html = render(source);
+  EXPECT_EQ(count(html, ">7<"), 1U);
+  EXPECT_EQ(count(html, ">Note<"), 1U);
 }
 
 TEST(OdfSheetUncached, a_value_without_text_is_content_of_the_sheet) {

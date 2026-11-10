@@ -29,15 +29,41 @@ StoredId>` with the payload tables `m_texts`, `m_tables`, `m_sheets`,
 **Parsing is a name-keyed dispatch table.** `odf_parser.cpp` maps an XML tag to
 a `TreeParser`. An unknown tag is skipped, and the recursion continues into its
 children. Many tags collapse onto a generic type: `text:h` is a paragraph,
-`text:section`, `text:table-of-content` and date fields are a `group`,
-`draw:g` is a frame. A container gets its own children parser
+`text:section`, `text:table-of-content` and the fields (`is_text_field`) are a
+`group`, `draw:g` is a frame. A container gets its own children parser
 (`parse_presentation_children` walks only `draw:page`).
+`parse_master_page_children` leaves out the objects with a
+`presentation:class`: they are the placeholders the slides fill in, their text
+the prompt ("Click to edit the title text format"). LibreOffice draws title,
+outline and the like on no slide. It draws the footer, date and slide number
+ones where a slide's `presentation:display-*` asks for them, with text the
+slide declares, which is not read, so they are left out as well.
+
+**A field shows the text its producer saved.** That is what LibreOffice shows
+until it updates the field, and it is read-only, as LibreOffice computes it
+again. A field whose `text:display` is `none` shows nothing, and so does
+hidden text saved with `text:is-hidden="true"`; the attribute defaults to
+false. A page number with no one number to show stays empty. In a header or
+footer it is the number of each page the header heads, which a render
+without pages does not have, and the producer saved the number of any one
+page: Word the last. On a slide or a master page Impress and Draw save a
+placeholder in angle brackets, `<number>` in the language of the user
+interface, and show the number of each slide. A ruby shows its base text;
+its annotation is not drawn.
 
 **Every `draw:*` shape is a `frame`.** `create_shape_element` records the kind
 in `m_shape_types`, and `frame_shape_type` reads it back. `draw:rect` and
 `draw:caption` are `rect`, `draw:line` and `draw:measure` are `line`,
 `draw:circle` and `draw:ellipse` are `ellipse` unless `draw:kind` cuts them,
 and every shape whose geometry is drawn rather than named is `custom`.
+
+**A frame floats by its stated position, not by its wrap.** LibreOffice
+places a frame where `style:horizontal-pos` says, and `style:wrap` only names
+the sides the text may flow on. `TextWrap` names the side the frame floats
+to, so `place_by_position` derives it from the position: the frame floats to
+its side where text may flow on the other, and stands alone where none may,
+or where it is centred, which css cannot flow around. A wrap its style chain
+does not state, inherited from around the frame, is left as it resolved.
 
 **Text runs are coalesced.** A maximal run of consecutive text nodes
 (`node_pcdata`, `text:s`, `text:tab`) is one `text` element spanning
@@ -64,6 +90,14 @@ knows. Consequences: `SheetCell::position()` and the id name the cell asked
 for; a handle follows the index, so a run can be split under it; children are
 shared, so a run inside a repeated cell belongs to the anchor.
 
+**A value cell without text shows its value.** LibreOffice formats a number,
+date, time or boolean when it loads the cell, so a row of sums saved without
+their `text:p` (LibreOffice 4.2) shows the sums. `sheet_cell_value` states that
+text: the value in its data style, else `General`, a boolean as `TRUE` or
+`FALSE`. A comment (`office:annotation`) or a drawing (`draw:*`) anchored in
+the cell is no text of it. A positional cell is a copy the file does not
+state, so the copies of a repeated cell stay empty.
+
 **The sheet containers are sorted vectors, not maps.** Parsing appends in
 document order, so the keys only grow, and a vector costs less than a tree
 node per entry. The cells of every row live in one array per sheet, and each
@@ -75,7 +109,8 @@ arrays are allocated once. The elements are a `std::deque`, because
 **Ids are stored narrow, payloads in sorted arrays.** `StoredId` is 32 bits.
 Every boundary widens it to the public 64-bit `ElementIdentifier`. The payload
 tables are `SortedSideTable`s written in id order. `m_list_types` and
-`m_list_markers` are plain `SideTable`s, written when a list is resolved.
+`m_list_markers` are plain `SideTable`s, written when lists and the outline
+are resolved.
 
 **Styles resolve to a flattened `ResolvedStyle`, eagerly.** `StyleRegistry`
 builds name-to-node indices from both files. Automatic and named styles land
@@ -84,8 +119,19 @@ every entry: each one resolves its `style:parent-style-name` (else the
 `style:family` default) first, copies that resolved base and overlays its own
 properties. A second cascade runs at query time: `get_intermediate_style`
 walks the element parent chain and overrides partial styles down to the
-target. Font names go through `style:font-face` to `svg:font-family`. Master
-pages are parsed into the element tree and into the style index.
+target. Font names go through `style:font-face` to `svg:font-family`. A text
+style without `style:font-name` names its family in `fo:font-family`, as
+PowerPoint's odp and many odg and ods do. PowerPoint writes the fonts of its
+theme there unresolved (`+mn-lt`, `+mj-ea`); LibreOffice knows no such family
+and falls back to its default, so they name none here either. Master pages are
+parsed into the element tree and into the style index.
+
+**A page layout stating no paper size is on A4 portrait.** LibreOffice takes
+the application's paper, from the locale (Letter in the US), and keeps it
+upright for a landscape layout; with no locale to ask, A4. Its
+`XMLPageMasterContext` completes the width and the height each on its own.
+So a text page has a width to set its lines in and a drawing page a box to
+hold its shapes. A sheet keeps none and prints to the printer's paper.
 
 **Percent units.** A percent font size, and the relative size of
 `style:text-position`, multiply the inherited size. A percent line height
@@ -99,26 +145,65 @@ beside it. So the fill state rides in the resolved colour's alpha. `draw:fill`
 sets it, `draw:fill-color` sets the rgb and keeps it, and `draw:fill` defaults
 to none, so a colour with no fill anywhere in the chain paints nothing.
 `draw:stroke` and `svg:stroke-color` ride the same way in the stroke colour's
-alpha, but `draw:stroke` defaults to solid. The fill has an exception on a
-shape: producers leave its solid default unwritten (AOO i112205), so
-`frame_style` fills a shape whose chain states no `draw:fill`, in
-LibreOffice's #729fcf where it states no colour either. A `draw:frame` keeps
-none. That is a heuristic: LibreOffice fills a text frame whose chain ends at
-the default style too, and leaves empty only one reaching its built-in
-`Frame` or `Graphics` styles, which LibreOffice's own files do. A gradient or
-hatch name, and `draw:shadow` with its offsets, cascade the same way and are
-read through `StyleRegistry::graphic_attribute`. `frame_style` takes the
-shadow from the element's own style, so a shadow on a frame is not cast
-again by what it holds.
+alpha, but `draw:stroke` defaults to solid.
+
+**A shape takes LibreOffice's fill defaults, a frame does not.** Producers
+leave the solid default unwritten (AOO i112205), so `frame_style` fills a
+shape whose chain states no `draw:fill`. Where the chain states no
+`draw:fill-color`, a shape that paints takes #729fcf, the pool default of
+`XFillColorItem`, whatever its `draw:fill`. A `draw:frame` is filled only as
+its style says. That is a heuristic: LibreOffice also fills a text frame whose
+chain ends at the default style, and leaves empty only one whose chain
+reaches its built-in `Frame` or `Graphics` style, as its own files do. A
+gradient or hatch name, and `draw:shadow` with its offsets, cascade the same
+way and are read through `StyleRegistry::graphic_attribute`. `frame_style`
+takes the shadow from the element's own style, so a shadow on a frame is not
+cast again by what it holds.
 
 **Gradients and hatches follow LibreOffice, not the spec's wording.** ODF
 19.218.2 and 19.209 describe the radial colors and the hatch rotation the
 other way round from what every producer writes and LibreOffice draws
 (`basegfx/source/tools/gradienttools.cxx`,
-`drawinglayer/source/primitive2d/fillhatchprimitive2d.cxx`). A unitless
-gradient `draw:angle` is in degrees (18.3.1) except where LibreOffice reads
-tenths (`gradient_angles_in_tenths`); a unitless hatch `draw:rotation` is
-always tenths (tdf#161327).
+`drawinglayer/source/primitive2d/fillhatchprimitive2d.cxx`): a hatch turns
+counterclockwise from horizontal. A unitless hatch `draw:rotation` is in
+tenths of a degree, whoever wrote it (tdf#161327). A unitless gradient
+`draw:angle` is in degrees (18.3.1), except where LibreOffice reads tenths
+(`xmloff/source/style/GradientStyle.cxx`, `gradient_angles_in_tenths`):
+always below ODF 1.2, which a missing `office:version` is, and at exactly 1.2
+from OpenOffice.org, StarOffice, Apache OpenOffice or a LibreOffice before 7.
+LibreOffice and its derivatives, Collabora Office among them, name
+`LibreOffice_project/` in the generator after their version.
+`GraphicStyle::fill_gradient` carries a `draw:gradient` (16.40.4) with
+`draw:start-intensity` and `draw:end-intensity` applied to its colors,
+`fill_hatch` a `draw:hatch` (16.40.6), whose `double` style is `crossed`.
+`shadow` is set where `draw:shadow` is `visible`; its color's alpha is
+`draw:shadow-opacity`, its blur `loext:shadow-blur`.
+
+**A page box carries the header and footer of its master page.** With
+`text_document_margin` a box is a run between breaks, not a page, so a header
+written once per box is the closest the boxes come. The first box takes the
+first content's master page; a paragraph naming one opens a box of it, as it
+opens a page in LibreOffice (20.283); any other box takes the previous one's
+`style:next-style-name`. A box opening a run of its master page takes the
+first page's header and footer where they differ. They are variants of the
+header and footer, so a page with none has no first one either, and naming
+the master page in use again opens a page, not a run. A later box whose
+layout states no width or height takes the first box's and keeps its own
+margins. LibreOffice's header height holds the spacing to the body
+(`fo:min-height` is `PROP_HeaderHeight`), so the box is `border-box`. The
+header and footer repeat per box and belong to `styles.xml`, so they carry no
+editing address.
+
+**Lists and the outline count as LibreOffice does.** A label follows
+`SwNumRule::MakeNumString`: prefix, the numbers of the last
+`text:display-levels` levels joined by a period, suffix. A shown level
+without a format drops out with its period, and a level without one itself
+keeps only prefix and suffix. LibreOffice numbers paragraphs, not items, and
+Word writes a deeper item inside an item of each level above that holds only
+the nested list. So an item counts only where a `text:p` or `text:h` comes
+before any nested list. A level an item skips opens at its start: 1, 1.1.1,
+then 1.2. A heading in a `text:list` is numbered as an item, not by the
+outline.
 
 **A flat document is the same `Document`, minus the package.** Its
 `office:document` root carries what `content.xml` and `styles.xml` carry
@@ -249,6 +334,6 @@ Larger tables fall back to the embedded replacement image.
 6. **Formula evaluation is partial.** Recalculation reports unsupported,
    repeated and array formulas as unevaluated; their stale results are dropped.
 7. **A font name keeps its quotes.** `TextStyle::font_name` comes from
-   `svg:font-family`, which is a css value, so `Liberation Serif` arrives as
-   `'Liberation Serif'`. The renderer copes, but the public value shows the
-   quotes.
+   `svg:font-family` or `fo:font-family`, which are css values, so
+   `Liberation Serif` arrives as `'Liberation Serif'`. The renderer copes,
+   but the public value shows the quotes.

@@ -90,6 +90,16 @@ std::string rect(const std::string &style) {
          R"(" svg:x="1cm" svg:y="1cm" svg:width="4cm" svg:height="2cm"/>)";
 }
 
+/// The html of the first view of the file at @p path.
+std::string render(const std::string &path) {
+  std::ostringstream html;
+  html::translate(odr::open(path), HtmlConfig())
+      .list_views()
+      .at(0)
+      .write_html(html);
+  return html.str();
+}
+
 } // namespace
 
 TEST(OdfFill, a_gradient_is_read_with_its_intensities_and_its_angle) {
@@ -136,8 +146,8 @@ TEST(OdfFill, a_gradient_angle_with_a_unit_is_read_in_that_unit) {
   const Document document = odr::open(path).as_document_file().document();
   const std::vector<GraphicStyle> styles = styles_of(document);
 
-  EXPECT_DOUBLE_EQ(styles.at(0).fill_gradient->angle, 27);
-  EXPECT_DOUBLE_EQ(styles.at(1).fill_gradient->angle, 90);
+  EXPECT_DOUBLE_EQ(styles.at(0).fill_gradient.value().angle, 27);
+  EXPECT_DOUBLE_EQ(styles.at(1).fill_gradient.value().angle, 90);
 }
 
 TEST(OdfFill, the_fill_kind_and_the_gradient_name_cascade_independently) {
@@ -188,9 +198,11 @@ TEST(OdfFill, a_solid_hatch_paints_its_fill_color_behind_the_lines) {
   EXPECT_EQ(hatch.color.rgb(), 0x3465a4u);
   EXPECT_EQ(hatch.distance.to_string(), "0.15cm");
   EXPECT_DOUBLE_EQ(hatch.rotation, 45);
+  ASSERT_TRUE(styles.at(0).fill_color.has_value());
   EXPECT_EQ(styles.at(0).fill_color->alpha, 255);
 
   ASSERT_TRUE(styles.at(1).fill_hatch.has_value());
+  ASSERT_TRUE(styles.at(1).fill_color.has_value());
   EXPECT_EQ(styles.at(1).fill_color->alpha, 0);
 }
 
@@ -207,6 +219,7 @@ TEST(OdfFill, a_gradient_that_names_nothing_paints_nothing) {
   const GraphicStyle style = styles_of(document).at(0);
 
   EXPECT_FALSE(style.fill_gradient.has_value());
+  ASSERT_TRUE(style.fill_color.has_value());
   EXPECT_EQ(style.fill_color->alpha, 0);
 }
 
@@ -270,7 +283,7 @@ TEST(OdfFill,
         odr::open(write_odg(name, styles, rect("g"), generator, version))
             .as_document_file()
             .document();
-    return styles_of(document).at(0).fill_gradient->angle;
+    return styles_of(document).at(0).fill_gradient.value().angle;
   };
   const std::string lo6 =
       "LibreOffice/6.4.7.2$Linux_X86_64 LibreOffice_project/40$Build-2";
@@ -296,9 +309,9 @@ TEST(OdfFill,
   EXPECT_DOUBLE_EQ(angle("odf_fill_angle_1_3.odg", lo6, "1.3"), 300);
 }
 
-TEST(OdfFill, a_shape_stating_no_fill_and_no_colour_takes_libreoffices) {
+TEST(OdfFill, a_shape_stating_no_fill_and_no_color_takes_libreoffices) {
   const std::string path =
-      write_odg("odf_fill_default_colour.odg",
+      write_odg("odf_fill_default_color.odg",
                 R"(<style:style style:name="g" style:family="graphic">)"
                 R"(<style:graphic-properties svg:stroke-color="#000000"/>)"
                 R"(</style:style>)",
@@ -312,7 +325,36 @@ TEST(OdfFill, a_shape_stating_no_fill_and_no_colour_takes_libreoffices) {
   EXPECT_EQ(style.fill_color->alpha, 255);
 }
 
-TEST(OdfFill, a_gradient_stating_nothing_is_black_with_its_centre_at_zero) {
+TEST(OdfFill, a_shape_filled_solid_with_no_color_takes_libreoffices) {
+  // `draw:fill` stated, `draw:fill-color` nowhere in the chain
+  const std::string path = write_odg(
+      "odf_fill_solid_no_color.odg",
+      R"(<draw:hatch draw:name="H" draw:color="#000000" )"
+      R"(draw:distance="0.1cm"/>)"
+      R"(<style:style style:name="solid" style:family="graphic">)"
+      R"(<style:graphic-properties draw:fill="solid"/></style:style>)"
+      R"(<style:style style:name="hatch" style:family="graphic">)"
+      R"(<style:graphic-properties draw:fill="hatch" draw:fill-hatch-name="H" )"
+      R"(draw:fill-hatch-solid="true"/></style:style>)"
+      R"(<style:style style:name="none" style:family="graphic">)"
+      R"(<style:graphic-properties draw:fill="none"/></style:style>)",
+      rect("solid") + rect("hatch") + rect("none"));
+
+  const Document document = odr::open(path).as_document_file().document();
+  const std::vector<GraphicStyle> styles = styles_of(document);
+
+  ASSERT_TRUE(styles.at(0).fill_color.has_value());
+  EXPECT_EQ(styles.at(0).fill_color->rgb(), 0x729fcfu);
+  EXPECT_EQ(styles.at(0).fill_color->alpha, 255);
+  ASSERT_TRUE(styles.at(1).fill_hatch.has_value());
+  ASSERT_TRUE(styles.at(1).fill_color.has_value());
+  EXPECT_EQ(styles.at(1).fill_color->rgb(), 0x729fcfu);
+  EXPECT_EQ(styles.at(1).fill_color->alpha, 255);
+  ASSERT_TRUE(styles.at(2).fill_color.has_value());
+  EXPECT_EQ(styles.at(2).fill_color->alpha, 0);
+}
+
+TEST(OdfFill, a_gradient_stating_nothing_is_black_with_its_center_at_zero) {
   // as LibreOffice's XMLGradientStyleImport starts from
   const std::string path =
       write_odg("odf_fill_gradient_bare.odg",
@@ -345,13 +387,8 @@ TEST(OdfFill, a_hatch_without_a_distance_is_drawn_at_the_minimum) {
   const Document document = odr::open(path).as_document_file().document();
   ASSERT_TRUE(styles_of(document).at(0).fill_hatch.has_value());
 
-  std::ostringstream html;
-  html::translate(odr::open(path), HtmlConfig())
-      .list_views()
-      .at(0)
-      .write_html(html);
   // the lines 2px apart, percent-encoded in the pattern
-  EXPECT_NE(html.str().find("width=%222px%22"), std::string::npos);
+  EXPECT_NE(render(path).find("width=%222px%22"), std::string::npos);
 }
 
 TEST(OdfFill, a_visible_shadow_stating_nothing_else_is_black_and_unshifted) {
@@ -387,12 +424,7 @@ TEST(OdfFill, a_shape_paints_its_gradient_on_a_layer_masked_to_it) {
                 R"(svg:width="4cm" svg:height="2cm" svg:viewBox="0 0 400 200" )"
                 R"(svg:d="M0 0 L400 200"/>)");
 
-  std::ostringstream html;
-  html::translate(odr::open(path), HtmlConfig())
-      .list_views()
-      .at(0)
-      .write_html(html);
-  const std::string page = html.str();
+  const std::string page = render(path);
 
   // one layer, for the closed ellipse; the open path is not filled
   const std::size_t layer = page.find(R"(class="odr-fill")");
