@@ -4,9 +4,13 @@
 #include <odr/internal/odf/odf_parser.hpp>
 #include <odr/internal/xml/xml_util.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <numbers>
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -326,6 +330,137 @@ void read_font_face(const char *name, const pugi::xml_node node,
   result.font_name = node.attribute("svg:font-family").value();
 }
 
+/// A fraction within [0, 1] from a percentage such as `20%`; @p fallback
+/// where unstated.
+double read_fraction(const pugi::xml_attribute attribute,
+                     const double fallback) {
+  const std::optional<Measure> percentage = read_measure(attribute);
+  if (!percentage.has_value() || !std::isfinite(percentage->magnitude())) {
+    return fallback;
+  }
+  return std::clamp(percentage->magnitude() / 100.0, 0.0, 1.0);
+}
+
+/// [OpenDocument] 18.3.1 `angle`: degrees, or the unit it names; unitless,
+/// tenths of a degree where @p tenths says so.
+double read_angle(const pugi::xml_attribute attribute, const bool tenths) {
+  const std::optional<Measure> angle = read_measure(attribute);
+  if (!angle.has_value() || !std::isfinite(angle->magnitude())) {
+    return 0;
+  }
+  const double value = angle->magnitude();
+  const std::string &unit = angle->unit().name();
+  if (unit == "deg") {
+    return value;
+  }
+  if (unit == "rad") {
+    return value * 180.0 / std::numbers::pi;
+  }
+  if (unit == "grad") {
+    return value * 0.9;
+  }
+  return tenths ? value / 10.0 : value;
+}
+
+/// @p color scaled by an intensity such as `80%`.
+Color read_intensity(const Color color, const pugi::xml_attribute intensity) {
+  const double factor = read_fraction(intensity, 1.0);
+  const auto scale = [&](const std::uint8_t channel) {
+    return static_cast<std::uint8_t>(std::lround(channel * factor));
+  };
+  return {scale(color.red), scale(color.green), scale(color.blue), color.alpha};
+}
+
+std::optional<GradientStyle>
+read_gradient_style(const pugi::xml_attribute attribute) {
+  if (!attribute) {
+    return {};
+  }
+  const char *value = attribute.value();
+  if (std::strcmp("linear", value) == 0) {
+    return GradientStyle::linear;
+  }
+  if (std::strcmp("axial", value) == 0) {
+    return GradientStyle::axial;
+  }
+  if (std::strcmp("radial", value) == 0) {
+    return GradientStyle::radial;
+  }
+  if (std::strcmp("ellipsoid", value) == 0) {
+    return GradientStyle::ellipsoid;
+  }
+  if (std::strcmp("square", value) == 0) {
+    return GradientStyle::square;
+  }
+  if (std::strcmp("rectangular", value) == 0) {
+    return GradientStyle::rectangular;
+  }
+  return {};
+}
+
+std::optional<HatchStyle>
+read_hatch_style(const pugi::xml_attribute attribute) {
+  if (!attribute) {
+    return {};
+  }
+  const char *value = attribute.value();
+  if (std::strcmp("single", value) == 0) {
+    return HatchStyle::single;
+  }
+  if (std::strcmp("double", value) == 0) {
+    return HatchStyle::crossed;
+  }
+  if (std::strcmp("triple", value) == 0) {
+    return HatchStyle::triple;
+  }
+  return {};
+}
+
+std::optional<GradientFill> read_gradient(const pugi::xml_node node,
+                                          const bool angle_in_tenths) {
+  if (!node) {
+    return {};
+  }
+  GradientFill result;
+  result.style = read_gradient_style(node.attribute("draw:style"))
+                     .value_or(GradientStyle::linear);
+  // what is not stated is zero, as LibreOffice's `XMLGradientStyleImport`
+  // starts from: black, and the center in the corner
+  result.start_color = read_intensity(
+      read_color(node.attribute("draw:start-color")).value_or(Color(0, 0, 0)),
+      node.attribute("draw:start-intensity"));
+  result.end_color = read_intensity(
+      read_color(node.attribute("draw:end-color")).value_or(Color(0, 0, 0)),
+      node.attribute("draw:end-intensity"));
+  result.angle = read_angle(node.attribute("draw:angle"), angle_in_tenths);
+  result.border = read_fraction(node.attribute("draw:border"), 0.0);
+  result.center_x = read_fraction(node.attribute("draw:cx"), 0.0);
+  result.center_y = read_fraction(node.attribute("draw:cy"), 0.0);
+  return result;
+}
+
+std::optional<HatchFill> read_hatch(const pugi::xml_node node) {
+  if (!node) {
+    return {};
+  }
+  // LibreOffice draws a hatch without a positive distance with its lines a
+  // minimum apart, which the renderer sets
+  std::optional<Measure> distance =
+      read_measure(node.attribute("draw:distance"));
+  if (!distance.has_value() || !(distance->magnitude() > 0) ||
+      !std::isfinite(distance->magnitude())) {
+    distance = Measure(0, DynamicUnit("cm"));
+  }
+  HatchFill result;
+  result.style = read_hatch_style(node.attribute("draw:style"))
+                     .value_or(HatchStyle::single);
+  result.color = read_color(node.attribute("draw:color")).value_or(Color());
+  result.distance = *distance;
+  // unitless tenths, whoever wrote it (tdf#161327)
+  result.rotation = read_angle(node.attribute("draw:rotation"), true);
+  return result;
+}
+
 } // namespace
 
 Style::Style() = default;
@@ -360,7 +495,7 @@ void Style::resolve_style_(const StyleRegistry *registry) {
   resolve_table_column_style_(m_node, m_resolved.table_column_style);
   resolve_table_row_style_(m_node, m_resolved.table_row_style);
   resolve_table_cell_style_(m_node, m_resolved.table_cell_style);
-  resolve_graphic_style_(m_node, m_resolved.graphic_style);
+  resolve_graphic_style_(registry, m_node, m_resolved.graphic_style);
 }
 
 void Style::resolve_text_style_(const StyleRegistry *registry,
@@ -609,7 +744,8 @@ void Style::resolve_table_cell_style_(const pugi::xml_node node,
                   result.border.bottom);
 }
 
-void Style::resolve_graphic_style_(const pugi::xml_node node,
+void Style::resolve_graphic_style_(const StyleRegistry *registry,
+                                   const pugi::xml_node node,
                                    GraphicStyle &result) {
   const pugi::xml_node graphic_properties =
       node.child("style:graphic-properties");
@@ -640,6 +776,54 @@ void Style::resolve_graphic_style_(const pugi::xml_node node,
         Color(fill_color->red, fill_color->green, fill_color->blue,
               result.fill_color.has_value() ? result.fill_color->alpha : 0);
   }
+  // `draw:shadow` with its offsets and color, and the fill kind with the
+  // gradient or hatch it names, cascade independently as well, so they are
+  // read through the style's bases.
+  if (registry != nullptr && graphic_properties) {
+    result.shadow.reset();
+    if (std::strcmp(registry->graphic_attribute(node, "draw:shadow").value(),
+                    "visible") == 0) {
+      const auto measure = [&](const char *name) {
+        return read_measure(registry->graphic_attribute(node, name))
+            .value_or(Measure(0, DynamicUnit("cm")));
+      };
+      Shadow shadow;
+      // LibreOffice's item defaults; the 0.2cm grey of its documents comes
+      // from their default style, which states it
+      shadow.offset_x = measure("draw:shadow-offset-x");
+      shadow.offset_y = measure("draw:shadow-offset-y");
+      shadow.blur = measure("loext:shadow-blur");
+      shadow.color =
+          read_color(registry->graphic_attribute(node, "draw:shadow-color"))
+              .value_or(Color(0, 0, 0));
+      shadow.color.alpha = static_cast<std::uint8_t>(std::lround(
+          255 *
+          read_fraction(
+              registry->graphic_attribute(node, "draw:shadow-opacity"), 1.0)));
+      result.shadow = shadow;
+    }
+
+    const std::string_view fill =
+        registry->graphic_attribute(node, "draw:fill").value();
+    result.fill_gradient.reset();
+    result.fill_hatch.reset();
+    if (fill == "gradient") {
+      result.fill_gradient = read_gradient(
+          registry->gradient_node(
+              registry->graphic_attribute(node, "draw:fill-gradient-name")
+                  .value()),
+          registry->gradient_angles_in_tenths());
+    } else if (fill == "hatch") {
+      result.fill_hatch = read_hatch(registry->hatch_node(
+          registry->graphic_attribute(node, "draw:fill-hatch-name").value()));
+      if (result.fill_hatch.has_value() && result.fill_color.has_value() &&
+          std::strcmp(registry->graphic_attribute(node, "draw:fill-hatch-solid")
+                          .value(),
+                      "true") == 0) {
+        result.fill_color->alpha = 255;
+      }
+    }
+  }
   if (const std::optional<VerticalAlign> vertical_align = read_vertical_align(
           graphic_properties.attribute("draw:textarea-vertical-align"));
       vertical_align.has_value()) {
@@ -662,7 +846,9 @@ StyleRegistry::StyleRegistry() = default;
 
 StyleRegistry::StyleRegistry(Document &document,
                              const pugi::xml_node content_root,
-                             const pugi::xml_node styles_root) {
+                             const pugi::xml_node styles_root,
+                             const bool gradient_angles_in_tenths)
+    : m_gradient_angles_in_tenths{gradient_angles_in_tenths} {
   generate_indices_(content_root, styles_root);
   generate_styles_();
   generate_master_pages_(document);
@@ -696,6 +882,10 @@ void StyleRegistry::generate_indices_(const pugi::xml_node node) {
       m_index_outline_style[e.attribute("style:name").value()] = e;
     } else if (name == "style:page-layout") {
       m_index_page_layout[e.attribute("style:name").value()] = e;
+    } else if (name == "draw:gradient") {
+      m_index_gradient[e.attribute("draw:name").value()] = e;
+    } else if (name == "draw:hatch") {
+      m_index_hatch[e.attribute("draw:name").value()] = e;
     } else if (name == "style:master-page") {
       std::string master_page_name = e.attribute("style:name").value();
       m_index_master_page[master_page_name] = e;
@@ -1118,6 +1308,46 @@ pugi::xml_node StyleRegistry::list_style_node(const std::string &name) const {
     return list_style_it->second;
   }
   return {};
+}
+
+pugi::xml_node StyleRegistry::gradient_node(const std::string &name) const {
+  const auto it = m_index_gradient.find(name);
+  return it == std::end(m_index_gradient) ? pugi::xml_node() : it->second;
+}
+
+pugi::xml_node StyleRegistry::hatch_node(const std::string &name) const {
+  const auto it = m_index_hatch.find(name);
+  return it == std::end(m_index_hatch) ? pugi::xml_node() : it->second;
+}
+
+pugi::xml_attribute StyleRegistry::graphic_attribute(const char *style_name,
+                                                     const char *name) const {
+  const auto it = m_index_style.find(style_name != nullptr ? style_name : "");
+  return graphic_attribute(
+      it == std::end(m_index_style) ? pugi::xml_node() : it->second, name);
+}
+
+pugi::xml_attribute StyleRegistry::graphic_attribute(const pugi::xml_node style,
+                                                     const char *name) const {
+  pugi::xml_node node = style;
+  // bounded, so a cycle of parents ends
+  for (std::size_t remaining = m_index_style.size() + 1; node && remaining > 0;
+       --remaining) {
+    if (const pugi::xml_attribute attribute =
+            node.child("style:graphic-properties").attribute(name)) {
+      return attribute;
+    }
+    const pugi::xml_attribute parent =
+        node.attribute("style:parent-style-name");
+    if (!parent) {
+      break;
+    }
+    const auto it = m_index_style.find(parent.value());
+    node = it == std::end(m_index_style) ? pugi::xml_node() : it->second;
+  }
+  return default_style_node("graphic")
+      .child("style:graphic-properties")
+      .attribute(name);
 }
 
 ElementIdentifier StyleRegistry::master_page(const std::string &name) const {

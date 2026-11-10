@@ -232,16 +232,78 @@ struct TableCellStyle final {
   void override(const TableCellStyle &other);
 };
 
+/// Collection of gradient shapes.
+enum class GradientStyle {
+  linear,
+  axial,
+  radial,
+  ellipsoid,
+  square,
+  rectangular,
+};
+
+/// A gradient fill.
+struct GradientFill final {
+  GradientStyle style{GradientStyle::linear};
+  /// The colors with their intensities applied.
+  Color start_color;
+  Color end_color;
+  /// Degrees, counterclockwise. At 0 a linear gradient runs from the start
+  /// color at the top to the end color at the bottom.
+  double angle{0};
+  /// The fraction of the gradient painted in the start color only.
+  double border{0};
+  /// The center of a radial, ellipsoid, square or rectangular gradient, as
+  /// fractions of the shape's width and height.
+  double center_x{0.5};
+  double center_y{0.5};
+};
+
+/// Collection of hatch patterns.
+enum class HatchStyle {
+  single,  ///< parallel lines
+  crossed, ///< the lines and their perpendicular
+  triple,  ///< crossed, plus the diagonal between them
+};
+
+/// A hatch fill.
+struct HatchFill final {
+  HatchStyle style{HatchStyle::single};
+  Color color;
+  /// The distance between two lines.
+  Measure distance{0, DynamicUnit()};
+  /// Degrees, counterclockwise. At 0 the lines run horizontally.
+  double rotation{0};
+};
+
+/// The shadow a shape casts.
+struct Shadow final {
+  Measure offset_x{0, DynamicUnit()};
+  Measure offset_y{0, DynamicUnit()};
+  /// The color, with the opacity in its alpha.
+  Color color;
+  /// The blur radius; zero is a sharp edge.
+  Measure blur{0, DynamicUnit()};
+};
+
 /// Represents a style for graphics.
 struct GraphicStyle final {
   std::optional<Measure> stroke_width;
   std::optional<Color> stroke_color;
+  /// The solid fill, also behind a solid hatch. Its alpha is 0 or 255, whether
+  /// it paints, not an opacity.
   std::optional<Color> fill_color;
   std::optional<VerticalAlign> vertical_align;
   std::optional<TextWrap> text_wrap;
   /// The side a frame sits on; unset where its offset decides instead.
   std::optional<HorizontalAlign> horizontal_position;
+  /// Paints over @ref fill_color.
+  std::optional<GradientFill> fill_gradient;
+  std::optional<HatchFill> fill_hatch;
+  /// Unset where the shape casts none.
+  std::optional<Shadow> shadow;
 
+  /// Takes what @p other sets; any fill it sets replaces gradient and hatch.
   void override(const GraphicStyle &other);
 };
 

@@ -26,6 +26,21 @@ The release run heads these entries with the version and opens a fresh
   and iOS, for example `server bind failed: 127.0.0.1:29665 (Address already
   in use)`.
 
+### Text documents and presentations
+
+- An odf shape or text box filled with a gradient or a hatch is painted as
+  LibreOffice paints it; square and rectangular gradients are drawn as an
+  ellipse. Multi-color and transparency gradients are not read. The dark sheet
+  clears a gradient or hatch as it clears a solid fill.
+- An odf shape whose style states no fill is filled, in LibreOffice's default
+  color where it states none. A text frame still fills only as told.
+- An odf shape or text frame casts the shadow its style states.
+
+### API, files and saving
+
+- `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
+  `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
+
 ### Fixes
 
 - A doc, xls or ppt opens when its storage directory gives a stream a child or

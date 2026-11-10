@@ -99,6 +99,38 @@ beside it. So the fill state rides in the resolved colour's alpha. `draw:fill`
 sets it, `draw:fill-color` sets the rgb and keeps it, and `draw:fill` defaults
 to none, so a colour with no fill anywhere in the chain paints nothing.
 
+**A shape takes LibreOffice's fill defaults, a frame does not.** Producers
+leave the solid default unwritten (AOO i112205), so `frame_style` fills a
+shape whose chain states no `draw:fill`. Where the chain states no
+`draw:fill-color`, a shape that paints takes #729fcf, the pool default of
+`XFillColorItem`, whatever its `draw:fill`. A `draw:frame` is filled only as
+its style says. That is a heuristic: LibreOffice also fills a text frame whose
+chain ends at the default style, and leaves empty only one whose chain
+reaches its built-in `Frame` or `Graphics` style, as its own files do. A
+gradient or hatch name, and `draw:shadow` with its offsets, cascade the same
+way and are read through `StyleRegistry::graphic_attribute`. `frame_style`
+takes the shadow from the element's own style, so a shadow on a frame is not
+cast again by what it holds.
+
+**Gradients and hatches follow LibreOffice, not the spec's wording.** ODF
+19.218.2 and 19.209 describe the radial colors and the hatch rotation the
+other way round from what every producer writes and LibreOffice draws
+(`basegfx/source/tools/gradienttools.cxx`,
+`drawinglayer/source/primitive2d/fillhatchprimitive2d.cxx`): a hatch turns
+counterclockwise from horizontal. A unitless hatch `draw:rotation` is in
+tenths of a degree, whoever wrote it (tdf#161327). A unitless gradient
+`draw:angle` is in degrees (18.3.1), except where LibreOffice reads tenths
+(`xmloff/source/style/GradientStyle.cxx`, `gradient_angles_in_tenths`):
+always below ODF 1.2, which a missing `office:version` is, and at exactly 1.2
+from OpenOffice.org, StarOffice, Apache OpenOffice or a LibreOffice before 7.
+LibreOffice and its derivatives, Collabora Office among them, name
+`LibreOffice_project/` in the generator after their version.
+`GraphicStyle::fill_gradient` carries a `draw:gradient` (16.40.4) with
+`draw:start-intensity` and `draw:end-intensity` applied to its colors,
+`fill_hatch` a `draw:hatch` (16.40.6), whose `double` style is `crossed`.
+`shadow` is set where `draw:shadow` is `visible`; its color's alpha is
+`draw:shadow-opacity`, its blur `loext:shadow-blur`.
+
 **A flat document is the same `Document`, minus the package.** Its
 `office:document` root carries what `content.xml` and `styles.xml` carry
 between them, so the flat constructor passes that root as both roots. Images
