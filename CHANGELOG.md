@@ -35,22 +35,10 @@ The release run heads these entries with the version and opens a fresh
 - An odf shape whose style states no fill is filled, in LibreOffice's default
   color where it states none. A text frame still fills only as told.
 - An odf shape or text frame casts the shadow its style states.
-
-### API, files and saving
-
-- `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
-  `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
 - With `text_document_margin`, an odt's page box shows the header and footer
   of its master page, the first page's where it differs; a paragraph naming a
   master page opens a box of that page. `style:header-left` and the headers'
   own margins, border and background are not read.
-
-### API, files and saving
-
-- `MasterPage` has `header()`, `footer()`, `first_header()`, `first_footer()`
-  and `next_master_page()`, `Paragraph` has `master_page()`, and `PageLayout`
-  the `header_min_height`, `header_spacing`, `footer_min_height` and
-  `footer_spacing` the layout states.
 - The headings of an odt are numbered after its `text:outline-style`, "1",
   "1.1", "1.2.1", as Word and LibreOffice number chapters, up to the ten
   levels LibreOffice has. The HTML writes the number before the heading.
@@ -63,6 +51,12 @@ The release run heads these entries with the version and opens a fresh
 
 ### API, files and saving
 
+- `GraphicStyle` carries the new `fill_gradient` (`GradientFill`),
+  `fill_hatch` (`HatchFill`) and `shadow` (`Shadow`).
+- `MasterPage` has `header()`, `footer()`, `first_header()`, `first_footer()`
+  and `next_master_page()`, `Paragraph` has `master_page()`, and `PageLayout`
+  the `header_min_height`, `header_spacing`, `footer_min_height` and
+  `footer_spacing` the layout states.
 - The new `Paragraph::marker` returns a heading's number in a numbered
   outline, empty for any other paragraph, in Python, Java and Objective-C
   too.
