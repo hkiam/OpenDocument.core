@@ -100,13 +100,6 @@ public:
   [[nodiscard]] pugi::xml_node gradient_node(const std::string &name) const;
   /// The `draw:hatch` named @p name, null where there is none.
   [[nodiscard]] pugi::xml_node hatch_node(const std::string &name) const;
-  /// The graphic property @p name as @p style states it, else as its nearest
-  /// base or the `graphic` default style does; null where none does.
-  [[nodiscard]] pugi::xml_attribute graphic_attribute(pugi::xml_node style,
-                                                      const char *name) const;
-  /// The same for the style named @p style_name, which may be null.
-  [[nodiscard]] pugi::xml_attribute graphic_attribute(const char *style_name,
-                                                      const char *name) const;
   /// Whether a unitless gradient angle counts tenths of a degree.
   [[nodiscard]] bool gradient_angles_in_tenths() const {
     return m_gradient_angles_in_tenths;
