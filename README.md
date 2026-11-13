@@ -50,6 +50,7 @@ Only public files and files written for these images:
 | `10-bullets/symbol-and-wingdings-bullets.png` | `10-bullets/symbol-bullets.fodt` (*pages*) |
 | `11-uncached/cells-without-cached-text.png` | `11-uncached/uncached-cells.fods` |
 | `12-font-family/image-1-title-font.png` | corpus `odp/image-1.odp`, slide 1 |
+| `13-shadows/shadows.png` | `13-shadows/shadows.fodg`; before is `main` at `55d0bce5`, rendered with headless Chrome |
 
 ## Differences from LibreOffice the images show
 
